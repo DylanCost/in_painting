@@ -2,10 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import List, Tuple, Optional, Dict
+from models.pretrained_encoders import (
+    PretrainedResNetEncoder, 
+    PretrainedVAEEncoder,
+    PretrainedStyleGANEncoder
+)
 
 
 class UNetVAE(nn.Module):
-    """U-Net based VAE for image inpainting."""
+    """U-Net based VAE with optional pretrained encoder."""
     
     def __init__(
         self,
@@ -13,7 +18,10 @@ class UNetVAE(nn.Module):
         latent_dim: int = 512,
         hidden_dims: List[int] = None,
         use_attention: bool = True,
-        use_skip_connections: bool = True
+        use_skip_connections: bool = True,
+        pretrained_encoder: Optional[str] = None,  # NEW
+        encoder_checkpoint: Optional[str] = None,  # NEW
+        freeze_encoder_stages: int = 0  # NEW
     ):
         super().__init__()
         
@@ -23,12 +31,37 @@ class UNetVAE(nn.Module):
         if hidden_dims is None:
             hidden_dims = [64, 128, 256, 512, 512]
         
-        # Encoder
-        self.encoder = UNetEncoder(
-            input_channels=input_channels,
-            hidden_dims=hidden_dims,
-            use_attention=use_attention
-        )
+        # Choose encoder based on pretrained option
+        if pretrained_encoder == 'resnet':
+            self.encoder = PretrainedResNetEncoder(
+                model_name='resnet50',
+                pretrained='imagenet',
+                frozen_stages=freeze_encoder_stages,
+                output_channels=hidden_dims
+            )
+        elif pretrained_encoder == 'vggface':
+            self.encoder = PretrainedResNetEncoder(
+                model_name='resnet50',
+                pretrained='vggface2',
+                frozen_stages=freeze_encoder_stages,
+                output_channels=hidden_dims
+            )
+        elif pretrained_encoder == 'vae' and encoder_checkpoint:
+            self.encoder = PretrainedVAEEncoder(
+                checkpoint_path=encoder_checkpoint,
+                frozen=(freeze_encoder_stages > 0)
+            )
+        elif pretrained_encoder == 'stylegan':
+            self.encoder = PretrainedStyleGANEncoder(
+                model_path=encoder_checkpoint,
+                frozen_layers=freeze_encoder_stages
+            )
+        else:
+            self.encoder = UNetEncoder(
+                input_channels=input_channels,
+                hidden_dims=hidden_dims,
+                use_attention=use_attention
+            )
         
         # Latent space
         self.fc_mu = nn.Linear(hidden_dims[-1] * 4 * 4, latent_dim)

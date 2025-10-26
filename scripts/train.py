@@ -19,15 +19,43 @@ from training.trainer import Trainer
 
 def main():
     parser = argparse.ArgumentParser(description='Train VAE for inpainting')
-    parser.add_argument('--config', type=str, default='config/default.yaml',
-                        help='Path to configuration file')
-    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu',
-                        help='Device to use for training')
+    parser.add_argument('--config', type=str, default='config/default.yaml')
+    parser.add_argument('--pretrained', type=str, default=None,
+                        help='Path to pretrained VAE checkpoint')
+    parser.add_argument('--pretrained_encoder', type=str, 
+                        choices=['resnet', 'vggface', 'vae', 'stylegan', 'none'],
+                        default='none', help='Type of pretrained encoder')
+    parser.add_argument('--freeze_encoder', type=int, default=0,
+                        help='Number of encoder stages to freeze')
     args = parser.parse_args()
     
     # Load configuration
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
+    
+    # Override with command line arguments
+    if args.pretrained_encoder != 'none':
+        config['model']['pretrained_encoder'] = args.pretrained_encoder
+        config['model']['encoder_checkpoint'] = args.pretrained
+        config['model']['freeze_encoder_stages'] = args.freeze_encoder
+    
+    # Create model with pretrained options
+    model = UNetVAE(
+        input_channels=config['model']['input_channels'],
+        latent_dim=config['model']['latent_dim'],
+        hidden_dims=config['model']['hidden_dims'],
+        use_attention=config['model']['use_attention'],
+        use_skip_connections=config['model']['use_skip_connections'],
+        pretrained_encoder=config['model'].get('pretrained_encoder'),
+        encoder_checkpoint=config['model'].get('encoder_checkpoint'),
+        freeze_encoder_stages=config['model'].get('freeze_encoder_stages', 0)
+    )
+    
+    # Load pretrained VAE weights if provided
+    if args.pretrained and args.pretrained_encoder == 'vae':
+        checkpoint = torch.load(args.pretrained)
+        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        print(f"Loaded pretrained weights from {args.pretrained}")
     
     # Set device
     device = torch.device(args.device)
