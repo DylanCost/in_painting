@@ -1,174 +1,224 @@
+import os
+from typing import Dict, Any, Optional, List, Tuple
+
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
-import os
-import numpy as np
-from typing import Tuple, Optional, Dict, Any
 
 
 class CelebADataset(Dataset):
-    """CelebA Dataset for inpainting with automatic mask generation."""
-    
+    """
+    CelebA dataset loader that:
+    - Returns clean images and minimal metadata (no masking)
+    - Uses official CelebA partition file for reproducible splits
+    - Optionally auto-downloads via torchvision when data is missing
+    - Provides class-level factory methods for config-driven creation
+    """
+
+    SPLIT_MAP = {
+        'train': 0,
+        'val': 1,
+        'test': 2,
+        'all': -1,
+    }
+
     def __init__(
         self,
         root_dir: str,
         split: str = 'train',
         image_size: int = 256,
-        mask_generator: Optional['MaskGenerator'] = None,
-        transform: Optional[transforms.Compose] = None
+        transform: Optional[transforms.Compose] = None,
+        download: bool = False,
+        verify_integrity: bool = True,  # kept for API completeness; not used extensively
     ):
-        self.root_dir = root_dir
+        """
+        Args:
+            root_dir: Path to CelebA dataset directory (expects torchvision layout: {root_dir}/img_align_celeba, list_eval_partition.txt)
+            split: One of ['train', 'val', 'test', 'all']
+            image_size: Target image size for resizing
+            transform: Optional torchvision transform pipeline to apply to images
+            download: If True and data is missing, attempt auto-download via torchvision
+            verify_integrity: Optionally verify dataset presence (lightweight)
+        """
+        super().__init__()
+        if split not in self.SPLIT_MAP:
+            raise ValueError(f"Invalid split '{split}'. Must be one of {list(self.SPLIT_MAP.keys())}.")
+
+        # Normalize root_dir to absolute path
+        self.root_dir = os.path.abspath(root_dir)
         self.split = split
         self.image_size = image_size
-        self.mask_generator = mask_generator or MaskGenerator()
-        
+
+        # Ensure data exists or download via torchvision
+        self._ensure_data(download=download, verify=verify_integrity)
+
         # Default transforms if none provided
         if transform is None:
             self.transform = transforms.Compose([
                 transforms.Resize((image_size, image_size)),
                 transforms.ToTensor(),
-                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+                transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
             ])
         else:
             self.transform = transform
-            
-        # Load image paths
-        self.image_paths = self._load_image_paths()
-        
-    def _load_image_paths(self) -> list:
-        """Load image paths based on split."""
-        img_dir = os.path.join(self.root_dir, 'img_align_celeba')
-        if not os.path.exists(img_dir):
-            raise ValueError(f"CelebA dataset not found at {img_dir}")
-            
-        all_images = sorted(os.listdir(img_dir))
-        
-        # Simple split: 80% train, 10% val, 10% test
-        total = len(all_images)
-        if self.split == 'train':
-            return all_images[:int(0.8 * total)]
-        elif self.split == 'val':
-            return all_images[int(0.8 * total):int(0.9 * total)]
-        else:  # test
-            return all_images[int(0.9 * total):]
-    
+
+        # Determine image directory and partition file paths
+        self.images_dir = os.path.join(self.root_dir, 'img_align_celeba')
+        self.partition_file = self._resolve_partition_file(self.root_dir)
+
+        # Load split membership from official partition file
+        self._filename_list = self._load_filenames_for_split(self.partition_file, self.split)
+
+    # -------------------------
+    # Factory methods
+    # -------------------------
+    @classmethod
+    def from_config(cls, config: Dict[str, Any], split: str = 'train', download: bool = True) -> "CelebADataset":
+        """
+        Construct a dataset from YAML/Dict configuration.
+
+        Expected config keys:
+            config['data']['data_path']: str
+            config['data']['image_size']: int
+        """
+        data_cfg = config.get('data', {})
+        root_dir = data_cfg.get('data_path', './data/celeba')
+        image_size = int(data_cfg.get('image_size', 256))
+
+        # Optionally support transform customization in future; default for now
+        return cls(
+            root_dir=root_dir,
+            split=split,
+            image_size=image_size,
+            transform=None,
+            download=download,
+            verify_integrity=True,
+        )
+
+    @classmethod
+    def create_splits_from_config(cls, config: Dict[str, Any], download: bool = True) -> Tuple["CelebADataset", "CelebADataset", "CelebADataset"]:
+        """
+        Convenience constructor that returns (train, val, test) datasets
+        with consistent configuration and optional auto-download.
+        """
+        train_ds = cls.from_config(config, split='train', download=download)
+        val_ds = cls.from_config(config, split='val', download=False)   # Already downloaded by train_ds
+        test_ds = cls.from_config(config, split='test', download=False) # Already downloaded by train_ds
+        return train_ds, val_ds, test_ds
+
+    # -------------------------
+    # Dataset protocol
+    # -------------------------
     def __len__(self) -> int:
-        return len(self.image_paths)
-    
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        return len(self._filename_list)
+
+    def __getitem__(self, idx: int) -> Dict[str, Any]:
+        filename = self._filename_list[idx]
+        img_path = os.path.join(self.images_dir, filename)
+
         # Load image
-        img_path = os.path.join(self.root_dir, 'img_align_celeba', self.image_paths[idx])
         image = Image.open(img_path).convert('RGB')
-        
+
         # Apply transforms
         image_tensor = self.transform(image)
-        
-        # Generate mask
-        mask = self.mask_generator.generate(
-            (1, self.image_size, self.image_size)
-        )
-        mask_tensor = torch.from_numpy(mask).float()
-        
-        # Create masked image
-        masked_image = image_tensor * (1 - mask_tensor)
-        
+
         return {
             'image': image_tensor,
-            'masked_image': masked_image,
-            'mask': mask_tensor,
-            'idx': idx
+            'filename': filename,
+            'idx': idx,
         }
 
+    # -------------------------
+    # Internal helpers
+    # -------------------------
+    def _ensure_data(self, download: bool, verify: bool) -> None:
+        """
+        Ensure CelebA data exists at self.root_dir. If not and download=True,
+        attempt to download via torchvision using the parent directory as root.
+        """
+        images_dir = os.path.join(self.root_dir, 'img_align_celeba')
+        partition_path = self._resolve_partition_file(self.root_dir)
 
-class MaskGenerator:
-    """Generate various types of masks for inpainting."""
-    
-    def __init__(
-        self,
-        mask_type: str = 'random',
-        mask_ratio: float = 0.4,
-        min_size: int = 32,
-        max_size: int = 128
-    ):
-        self.mask_type = mask_type
-        self.mask_ratio = mask_ratio
-        self.min_size = min_size
-        self.max_size = max_size
-    
-    def generate(self, shape: Tuple[int, int, int]) -> np.ndarray:
-        """Generate mask based on configured type."""
-        if self.mask_type == 'random':
-            return self.random_bbox_mask(shape)
-        elif self.mask_type == 'center':
-            return self.center_mask(shape)
-        elif self.mask_type == 'irregular':
-            return self.irregular_mask(shape)
-        else:
-            raise ValueError(f"Unknown mask type: {self.mask_type}")
-    
-    def random_bbox_mask(self, shape: Tuple[int, int, int]) -> np.ndarray:
-        """Generate random bounding box mask."""
-        _, h, w = shape
-        mask = np.zeros((1, h, w), dtype=np.float32)
-        
-        # Random box size
-        box_h = np.random.randint(self.min_size, min(self.max_size, h))
-        box_w = np.random.randint(self.min_size, min(self.max_size, w))
-        
-        # Random position
-        y = np.random.randint(0, h - box_h)
-        x = np.random.randint(0, w - box_w)
-        
-        mask[:, y:y+box_h, x:x+box_w] = 1.0
-        return mask
-    
-    def center_mask(self, shape: Tuple[int, int, int]) -> np.ndarray:
-        """Generate center mask."""
-        _, h, w = shape
-        mask = np.zeros((1, h, w), dtype=np.float32)
-        
-        size = int(min(h, w) * self.mask_ratio)
-        y = (h - size) // 2
-        x = (w - size) // 2
-        
-        mask[:, y:y+size, x:x+size] = 1.0
-        return mask
-    
-    def irregular_mask(self, shape: Tuple[int, int, int]) -> np.ndarray:
-        """Generate irregular free-form mask."""
-        _, h, w = shape
-        mask = np.zeros((1, h, w), dtype=np.float32)
-        
-        # Number of strokes
-        num_strokes = np.random.randint(1, 5)
-        
-        for _ in range(num_strokes):
-            # Random starting point
-            y = np.random.randint(0, h)
-            x = np.random.randint(0, w)
-            
-            # Random walk
-            num_points = np.random.randint(5, 15)
-            for _ in range(num_points):
-                # Random direction and length
-                angle = np.random.uniform(0, 2 * np.pi)
-                length = np.random.randint(10, 30)
-                
-                # Calculate end point
-                y_end = int(y + length * np.sin(angle))
-                x_end = int(x + length * np.cos(angle))
-                
-                # Clip to image boundaries
-                y_end = np.clip(y_end, 0, h - 1)
-                x_end = np.clip(x_end, 0, w - 1)
-                
-                # Draw thick line
-                thickness = np.random.randint(5, 15)
-                mask[:, max(0, y-thickness):min(h, y+thickness),
-                     max(0, x-thickness):min(w, x+thickness)] = 1.0
-                
-                # Move to end point
-                y, x = y_end, x_end
-        
-        return mask
+        have_images = os.path.isdir(images_dir) and len(os.listdir(images_dir)) > 0
+        have_partition = partition_path is not None and os.path.isfile(partition_path)
+
+        if have_images and have_partition:
+            return
+
+        if not download:
+            missing = []
+            if not have_images:
+                missing.append(f"images at {images_dir}")
+            if not have_partition:
+                missing.append("list_eval_partition.txt")
+            raise FileNotFoundError(
+                "CelebA dataset not found. Missing: " + ", ".join(missing) +
+                f". Set download=True or prepare dataset at {self.root_dir}."
+            )
+
+        # Attempt auto-download via torchvision
+        try:
+            import torchvision
+            parent = os.path.dirname(self.root_dir)
+            # This will place files under {parent}/celeba/
+            torchvision.datasets.CelebA(root=parent, split='all', download=True)
+            # If self.root_dir wasn't {parent}/celeba, prefer the torchvision layout
+            torchvision_dir = os.path.join(parent, 'celeba')
+            if os.path.abspath(torchvision_dir) != self.root_dir:
+                # Prefer torchvision dir to ensure consistent structure
+                self.root_dir = os.path.abspath(torchvision_dir)
+        except Exception as e:
+            raise RuntimeError(f"Automatic download with torchvision failed: {e}")
+
+        # Final simple verification
+        images_dir = os.path.join(self.root_dir, 'img_align_celeba')
+        if not os.path.isdir(images_dir):
+            raise FileNotFoundError(f"Downloaded CelebA but missing images directory: {images_dir}")
+        if self._resolve_partition_file(self.root_dir) is None:
+            raise FileNotFoundError("Downloaded CelebA but could not locate list_eval_partition.txt")
+
+    @staticmethod
+    def _resolve_partition_file(base_dir: str) -> Optional[str]:
+        """
+        Locate the official partition file (list_eval_partition.txt) under torchvision layout.
+        Common locations observed:
+            - {base_dir}/list_eval_partition.txt
+            - {base_dir}/Anno/list_eval_partition.txt
+        """
+        candidates = [
+            os.path.join(base_dir, 'list_eval_partition.txt'),
+            os.path.join(base_dir, 'Anno', 'list_eval_partition.txt'),
+        ]
+        for path in candidates:
+            if os.path.isfile(path):
+                return path
+        return None
+
+    @classmethod
+    def _load_filenames_for_split(cls, partition_file: str, split: str) -> List[str]:
+        """
+        Parse the official partition file and return filenames belonging to the requested split.
+        """
+        target = cls.SPLIT_MAP[split]
+        filenames: List[str] = []
+        with open(partition_file, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) != 2:
+                    continue
+                filename, partition_str = parts
+                try:
+                    partition = int(partition_str)
+                except ValueError:
+                    continue
+
+                if target == -1:  # 'all'
+                    filenames.append(filename)
+                else:
+                    if partition == target:
+                        filenames.append(filename)
+
+        if not filenames:
+            raise ValueError(f"No filenames found for split='{split}' using '{partition_file}'.")
+        return sorted(filenames)

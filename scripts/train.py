@@ -11,7 +11,7 @@ import os
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from data.celeba_dataset import CelebADataset, MaskGenerator
+from data.celeba_dataset import CelebADataset
 from models.unet_vae import UNetVAE
 from losses.vae_loss import VAELoss
 from training.trainer import Trainer
@@ -22,11 +22,13 @@ def main():
     parser.add_argument('--config', type=str, default='config/default.yaml')
     parser.add_argument('--pretrained', type=str, default=None,
                         help='Path to pretrained VAE checkpoint')
-    parser.add_argument('--pretrained_encoder', type=str, 
+    parser.add_argument('--pretrained_encoder', type=str,
                         choices=['resnet', 'vggface', 'vae', 'stylegan', 'none'],
                         default='none', help='Type of pretrained encoder')
     parser.add_argument('--freeze_encoder', type=int, default=0,
                         help='Number of encoder stages to freeze')
+    parser.add_argument('--device', type=str, default=('cuda' if torch.cuda.is_available() else 'cpu'),
+                        help='Device to use (e.g., cpu, cuda, cuda:0)')
     args = parser.parse_args()
     
     # Load configuration
@@ -61,27 +63,10 @@ def main():
     device = torch.device(args.device)
     print(f"Using device: {device}")
     
-    # Create mask generator
-    mask_generator = MaskGenerator(
-        mask_type=config['mask']['type'],
-        mask_ratio=config['mask']['mask_ratio'],
-        min_size=config['mask']['min_size'],
-        max_size=config['mask']['max_size']
-    )
-    
-    # Create datasets
-    train_dataset = CelebADataset(
-        root_dir=config['data']['data_path'],
-        split='train',
-        image_size=config['data']['image_size'],
-        mask_generator=mask_generator
-    )
-    
-    val_dataset = CelebADataset(
-        root_dir=config['data']['data_path'],
-        split='val',
-        image_size=config['data']['image_size'],
-        mask_generator=mask_generator
+    # Create datasets (auto-download via torchvision if missing)
+    train_dataset, val_dataset, _ = CelebADataset.create_splits_from_config(
+        config=config,
+        download=True
     )
     
     # Create data loaders
@@ -101,14 +86,6 @@ def main():
         pin_memory=True
     )
     
-    # Create model
-    model = UNetVAE(
-        input_channels=config['model']['input_channels'],
-        latent_dim=config['model']['latent_dim'],
-        hidden_dims=config['model']['hidden_dims'],
-        use_attention=config['model']['use_attention'],
-        use_skip_connections=config['model']['use_skip_connections']
-    )
     
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
     
@@ -126,6 +103,7 @@ def main():
         val_loader=val_loader,
         loss_fn=loss_fn,
         config=config,
+        mask_config=config['mask'],
         device=device
     )
     

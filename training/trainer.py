@@ -7,6 +7,7 @@ from tqdm import tqdm
 import os
 from typing import Dict, Optional
 from torch.utils.tensorboard import SummaryWriter
+from masking.mask_generator import MaskGenerator
 
 
 class Trainer:
@@ -19,6 +20,7 @@ class Trainer:
         val_loader: DataLoader,
         loss_fn: nn.Module,
         config: Dict,
+        mask_config: Dict,
         device: str = 'cuda',
         test_loader: DataLoader = None
     ):
@@ -28,7 +30,15 @@ class Trainer:
         self.test_loader = test_loader
         self.loss_fn = loss_fn
         self.config = config
+        self.mask_config = mask_config
         self.device = device
+
+        # Mask generators
+        self.train_mask_gen = MaskGenerator.for_train(self.mask_config)
+        self.eval_mask_gen = MaskGenerator.for_eval(
+            self.mask_config,
+            cache_dir=self.mask_config.get('cache_dir', './data/masks')
+        )
         
         # Setup optimizer with differential learning rates
         self.setup_optimizer()
@@ -113,9 +123,10 @@ class Trainer:
         for batch_idx, batch in enumerate(pbar):
             # Move to device
             image = batch['image'].to(self.device)
-            masked_image = batch['masked_image'].to(self.device)
-            mask = batch['mask'].to(self.device)
-            
+            B, C, H, W = image.shape
+            mask = self.train_mask_gen.generate((B, 1, H, W)).to(self.device)
+            masked_image = image * (1.0 - mask)
+
             # Forward pass
             outputs = self.model(masked_image, mask)
             
@@ -178,9 +189,14 @@ class Trainer:
             for batch in tqdm(self.val_loader, desc='Validation'):
                 # Move to device
                 image = batch['image'].to(self.device)
-                masked_image = batch['masked_image'].to(self.device)
-                mask = batch['mask'].to(self.device)
-                
+                filenames = batch['filename']  # list[str]
+                B, C, H, W = image.shape
+                mask = self.eval_mask_gen.generate_for_filenames(
+                    filenames=filenames,
+                    shape=(1, H, W)
+                ).to(self.device)
+                masked_image = image * (1.0 - mask)
+
                 # Forward pass
                 outputs = self.model(masked_image, mask)
                 
@@ -215,9 +231,14 @@ class Trainer:
         with torch.no_grad():
             for batch in tqdm(self.test_loader, desc='Testing'):
                 image = batch['image'].to(self.device)
-                masked_image = batch['masked_image'].to(self.device)
-                mask = batch['mask'].to(self.device)
-                
+                filenames = batch['filename']  # list[str]
+                B, C, H, W = image.shape
+                mask = self.eval_mask_gen.generate_for_filenames(
+                    filenames=filenames,
+                    shape=(1, H, W)
+                ).to(self.device)
+                masked_image = image * (1.0 - mask)
+
                 outputs = self.model(masked_image, mask)
                 losses = self.loss_fn(
                     outputs['reconstruction'],
@@ -332,14 +353,23 @@ class Trainer:
         
         # Create grid of images
         n_samples = min(8, batch['image'].shape[0])
-        
+
+        # Prepare masked images for visualization (compute if not provided)
+        imgs = batch['image'][:n_samples]
+        try:
+            B, C, H, W = imgs.shape
+            vis_mask = self.train_mask_gen.generate((B, 1, H, W)).to(imgs.device)
+            vis_masked = imgs * (1.0 - vis_mask)
+        except Exception:
+            vis_masked = imgs  # fallback if shape unexpected
+
         # Denormalize images for visualization
         def denormalize(x):
             return x  # Images are already in [-1, 1] range
-        
+
         comparison = torch.cat([
-            denormalize(batch['image'][:n_samples]),
-            denormalize(batch['masked_image'][:n_samples]),
+            denormalize(imgs),
+            denormalize(vis_masked),
             denormalize(outputs['reconstruction'][:n_samples])
         ], dim=0)
         
