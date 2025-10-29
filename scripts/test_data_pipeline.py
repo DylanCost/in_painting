@@ -63,7 +63,7 @@ def dump_samples(
             masks = mask_gen.generate_for_filenames(
                 [filename],
                 (1, H, W),
-                cache_dir=mask_gen.cache_dir or "./data/masks"
+                cache_dir=mask_gen.cache_dir or "./assets/masks"
             )
         else:
             masks = mask_gen.generate((1, 1, H, W))

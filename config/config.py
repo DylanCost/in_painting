@@ -41,7 +41,7 @@ class TrainingConfig:
 class DataConfig:
     """Dataset configuration."""
     dataset: str = "celeba"
-    data_path: str = "./data/celeba"
+    data_path: str = "./assets/datasets/celeba"
     image_size: int = 256
     num_workers: int = 4
     augmentation: bool = True
@@ -55,7 +55,7 @@ class MaskConfig:
     min_size: int = 32
     max_size: int = 128
     seed: int = 42
-    cache_dir: str = "./data/masks"
+    cache_dir: str = "./assets/masks"
 
 
 @dataclass

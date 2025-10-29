@@ -51,14 +51,14 @@ python scripts/download_celeba.py
 #### Option C: Manual Download
 1. Visit [CelebA website](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html)
 2. Download `img_align_celeba.zip` (1.4GB) and `list_eval_partition.txt`
-3. Extract to `./data/celeba/`
+3. Extract to `./assets/datasets/celeba/`
 4. Verify: `python scripts/download_celeba.py --verify-only`
 
 #### Option D: Simple torchvision script
 ```python
 # Alternative: Use this simple Python script
 import torchvision.datasets as datasets
-dataset = datasets.CelebA(root='./data', split='all', download=True)
+dataset = datasets.CelebA(root='./assets/datasets', split='all', download=True)
 print(f"Downloaded {len(dataset)} images!")
 ```
 
@@ -174,6 +174,16 @@ vae-inpainting/
 └── results/             # Output images and metrics
 ```
 
+## Assets directory conventions
+
+- Datasets are stored under `./assets/datasets/{name}/`. For CelebA, expect `./assets/datasets/celeba/` containing:
+  - `img_align_celeba/`
+  - `Anno/`
+  - `list_eval_partition.txt`
+- Generated mask caches are stored under `./assets/masks/` and are ignored by Git.
+- Model weights and training logs are stored in `./weights/` and `./logs/` respectively, and are ignored by Git.
+- The repository's `.gitignore` excludes `assets/datasets/`, `assets/masks/`, `weights/`, and `logs/` while keeping source code and configuration files tracked.
+
 ## 🔧 Configuration
 
 ### Key Configuration Options
@@ -260,7 +270,7 @@ python scripts/evaluate.py --checkpoint weights/best_model.pt
 ### Dataset Download Issues
 - **Google Drive Quota**: Use `--use-torchvision` flag instead
 - **Slow Download**: The dataset is 1.4GB, ensure stable connection
-- **Verification Failed**: Check you have 202,599 images in `data/celeba/img_align_celeba/`
+- **Verification Failed**: Check you have 202,599 images in `assets/datasets/celeba/img_align_celeba/`
 
 ### Training Issues
 - **Out of Memory**: Reduce batch size or image size in config

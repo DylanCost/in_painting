@@ -37,7 +37,7 @@ class Trainer:
         self.train_mask_gen = MaskGenerator.for_train(self.mask_config)
         self.eval_mask_gen = MaskGenerator.for_eval(
             self.mask_config,
-            cache_dir=self.mask_config.cache_dir if hasattr(self.mask_config, 'cache_dir') else './data/masks'
+            cache_dir=self.mask_config.cache_dir if hasattr(self.mask_config, 'cache_dir') else './assets/masks'
         )
         
         # Setup optimizer with differential learning rates

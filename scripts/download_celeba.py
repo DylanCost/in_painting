@@ -54,7 +54,7 @@ class CelebADownloader:
         'list_eval_partition.txt': 'd32c9cbf5e040fd66e47c5a0e3e8cf8d',
     }
     
-    def __init__(self, data_dir: str = './data/celeba', quiet: bool = False):
+    def __init__(self, data_dir: str = './assets/datasets/celeba', quiet: bool = False):
         """
         Initialize CelebA downloader.
         
@@ -584,8 +584,8 @@ Examples:
         """
     )
     
-    parser.add_argument('--data-dir', type=str, default='./data/celeba',
-                        help='Directory to save the dataset (default: ./data/celeba)')
+    parser.add_argument('--data-dir', type=str, default='./assets/datasets/celeba',
+                        help='Directory to save the dataset (default: ./assets/datasets/celeba)')
     parser.add_argument('--include-extras', action='store_true',
                         help='Download attribute and landmark files (not required for basic inpainting)')
     parser.add_argument('--remove-zips', action='store_true',
