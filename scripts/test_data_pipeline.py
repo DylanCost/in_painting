@@ -100,7 +100,24 @@ def main():
     print(f"Using device: {device}")
 
     # Build datasets (auto-download if missing)
-    train_ds, val_ds, test_ds = CelebADataset.create_splits_from_config(config, download=True)
+    train_ds = CelebADataset(
+        root_dir=config.data.data_path,
+        split='train',
+        image_size=config.data.image_size,
+        download=True
+    )
+    val_ds = CelebADataset(
+        root_dir=config.data.data_path,
+        split='val',
+        image_size=config.data.image_size,
+        download=False
+    )
+    test_ds = CelebADataset(
+        root_dir=config.data.data_path,
+        split='test',
+        image_size=config.data.image_size,
+        download=False
+    )
 
     # Build mask generators
     train_mask_gen = MaskGenerator.for_train(config.mask)

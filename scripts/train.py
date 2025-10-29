@@ -67,9 +67,17 @@ def main():
     print(f"Using device: {device}")
     
     # Create datasets (auto-download via torchvision if missing)
-    train_dataset, val_dataset, _ = CelebADataset.create_splits_from_config(
-        config=config,
+    train_dataset = CelebADataset(
+        root_dir=config.data.data_path,
+        split='train',
+        image_size=config.data.image_size,
         download=True
+    )
+    val_dataset = CelebADataset(
+        root_dir=config.data.data_path,
+        split='val',
+        image_size=config.data.image_size,
+        download=False  # Already downloaded
     )
     
     # Create data loaders
