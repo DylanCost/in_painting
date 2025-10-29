@@ -7,6 +7,7 @@ from tqdm import tqdm
 import os
 from typing import Dict, Optional
 from torch.utils.tensorboard import SummaryWriter
+from masking.mask_generator import MaskGenerator
 
 
 class Trainer:
@@ -19,6 +20,7 @@ class Trainer:
         val_loader: DataLoader,
         loss_fn: nn.Module,
         config: Dict,
+        mask_config: Dict,
         device: str = 'cuda',
         test_loader: DataLoader = None
     ):
@@ -28,7 +30,15 @@ class Trainer:
         self.test_loader = test_loader
         self.loss_fn = loss_fn
         self.config = config
+        self.mask_config = mask_config
         self.device = device
+
+        # Mask generators
+        self.train_mask_gen = MaskGenerator.for_train(self.mask_config)
+        self.eval_mask_gen = MaskGenerator.for_eval(
+            self.mask_config,
+            cache_dir=self.mask_config.cache_dir if hasattr(self.mask_config, 'cache_dir') else './assets/masks'
+        )
         
         # Setup optimizer with differential learning rates
         self.setup_optimizer()
@@ -39,20 +49,20 @@ class Trainer:
         # Learning rate scheduler
         self.scheduler = lr_scheduler.CosineAnnealingLR(
             self.optimizer,
-            T_max=config['training']['epochs'],
+            T_max=config.training.epochs,
             eta_min=1e-6
         )
         
         # Logging
-        if config['logging']['use_wandb']:
-            wandb.init(project="vae-inpainting", config=config)
+        if config.logging.use_wandb:
+            wandb.init(project="vae-inpainting", config=config.to_dict())
         
-        if config['logging']['use_tensorboard']:
-            self.writer = SummaryWriter(config['logging']['log_dir'])
+        if config.logging.use_tensorboard:
+            self.writer = SummaryWriter(config.logging.log_dir)
         else:
             self.writer = None
         
-        self.checkpoint_dir = config['logging']['checkpoint_dir']
+        self.checkpoint_dir = config.logging.checkpoint_dir
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         
         self.current_epoch = 0
@@ -63,7 +73,7 @@ class Trainer:
         """Setup optimizer with different LRs for encoder/decoder."""
         
         # Check if using differential learning rates
-        if 'encoder_lr' in self.config['training']:
+        if self.config.training.encoder_lr is not None:
             encoder_params = []
             decoder_params = []
             
@@ -74,20 +84,20 @@ class Trainer:
                     decoder_params.append(param)
             
             self.optimizer = Adam([
-                {'params': encoder_params, 'lr': self.config['training']['encoder_lr']},
-                {'params': decoder_params, 'lr': self.config['training']['decoder_lr']}
-            ], betas=(self.config['training']['beta1'], self.config['training']['beta2']))
+                {'params': encoder_params, 'lr': self.config.training.encoder_lr},
+                {'params': decoder_params, 'lr': self.config.training.decoder_lr}
+            ], betas=(self.config.training.beta1, self.config.training.beta2))
         else:
             # Standard optimizer
             self.optimizer = Adam(
                 self.model.parameters(),
-                lr=self.config['training']['learning_rate'],
-                betas=(self.config['training']['beta1'], self.config['training']['beta2'])
+                lr=self.config.training.learning_rate,
+                betas=(self.config.training.beta1, self.config.training.beta2)
             )
     
     def setup_progressive_unfreezing(self):
         """Setup schedule for progressive unfreezing."""
-        self.unfreeze_schedule = self.config['training'].get('unfreeze_schedule', {})
+        self.unfreeze_schedule = self.config.training.unfreeze_schedule
     
     def maybe_unfreeze_layers(self, epoch: int):
         """Unfreeze layers according to schedule."""
@@ -113,9 +123,10 @@ class Trainer:
         for batch_idx, batch in enumerate(pbar):
             # Move to device
             image = batch['image'].to(self.device)
-            masked_image = batch['masked_image'].to(self.device)
-            mask = batch['mask'].to(self.device)
-            
+            B, C, H, W = image.shape
+            mask = self.train_mask_gen.generate((B, 1, H, W)).to(self.device)
+            masked_image = image * (1.0 - mask)
+
             # Forward pass
             outputs = self.model(masked_image, mask)
             
@@ -133,10 +144,10 @@ class Trainer:
             losses['total'].backward()
             
             # Gradient clipping
-            if 'gradient_clip' in self.config['training']:
+            if self.config.training.gradient_clip is not None:
                 torch.nn.utils.clip_grad_norm_(
                     self.model.parameters(),
-                    self.config['training']['gradient_clip']
+                    self.config.training.gradient_clip
                 )
             
             self.optimizer.step()
@@ -154,11 +165,11 @@ class Trainer:
             })
             
             # Logging
-            if self.global_step % self.config['logging']['log_interval'] == 0:
+            if self.global_step % self.config.logging.log_interval == 0:
                 self.log_metrics(losses, 'train')
             
             # Sample generation
-            if self.global_step % self.config['logging']['sample_interval'] == 0:
+            if self.global_step % self.config.logging.sample_interval == 0:
                 self.generate_samples(batch, outputs)
             
             self.global_step += 1
@@ -178,9 +189,14 @@ class Trainer:
             for batch in tqdm(self.val_loader, desc='Validation'):
                 # Move to device
                 image = batch['image'].to(self.device)
-                masked_image = batch['masked_image'].to(self.device)
-                mask = batch['mask'].to(self.device)
-                
+                filenames = batch['filename']  # list[str]
+                B, C, H, W = image.shape
+                mask = self.eval_mask_gen.generate_for_filenames(
+                    filenames=filenames,
+                    shape=(1, H, W)
+                ).to(self.device)
+                masked_image = image * (1.0 - mask)
+
                 # Forward pass
                 outputs = self.model(masked_image, mask)
                 
@@ -215,9 +231,14 @@ class Trainer:
         with torch.no_grad():
             for batch in tqdm(self.test_loader, desc='Testing'):
                 image = batch['image'].to(self.device)
-                masked_image = batch['masked_image'].to(self.device)
-                mask = batch['mask'].to(self.device)
-                
+                filenames = batch['filename']  # list[str]
+                B, C, H, W = image.shape
+                mask = self.eval_mask_gen.generate_for_filenames(
+                    filenames=filenames,
+                    shape=(1, H, W)
+                ).to(self.device)
+                masked_image = image * (1.0 - mask)
+
                 outputs = self.model(masked_image, mask)
                 losses = self.loss_fn(
                     outputs['reconstruction'],
@@ -239,7 +260,7 @@ class Trainer:
     
     def train(self):
         """Main training loop with periodic test evaluation."""
-        for epoch in range(self.config['training']['epochs']):
+        for epoch in range(self.config.training.epochs):
             self.current_epoch = epoch
             
             # Train
@@ -258,7 +279,7 @@ class Trainer:
             self.scheduler.step()
             
             # Logging
-            print(f"\nEpoch {epoch}/{self.config['training']['epochs']}")
+            print(f"\nEpoch {epoch}/{self.config.training.epochs}")
             print(f"Train Loss: {train_losses['total']:.4f}")
             print(f"Val Loss: {val_losses['total']:.4f}")
             
@@ -266,7 +287,7 @@ class Trainer:
             self.log_metrics(val_losses, 'val_epoch')
             
             # Save checkpoint
-            if epoch % self.config['logging']['save_interval'] == 0:
+            if epoch % self.config.logging.save_interval == 0:
                 self.save_checkpoint(epoch, val_losses['total'])
             
             # Save best model
@@ -319,7 +340,7 @@ class Trainer:
             else:
                 processed_metrics[key] = value
         
-        if self.config['logging']['use_wandb']:
+        if self.config.logging.use_wandb:
             wandb.log({f"{prefix}/{k}": v for k, v in processed_metrics.items()}, step=self.global_step)
         
         if self.writer is not None:
@@ -332,27 +353,36 @@ class Trainer:
         
         # Create grid of images
         n_samples = min(8, batch['image'].shape[0])
-        
+
+        # Prepare masked images for visualization (compute if not provided)
+        imgs = batch['image'][:n_samples]
+        try:
+            B, C, H, W = imgs.shape
+            vis_mask = self.train_mask_gen.generate((B, 1, H, W)).to(imgs.device)
+            vis_masked = imgs * (1.0 - vis_mask)
+        except Exception:
+            vis_masked = imgs  # fallback if shape unexpected
+
         # Denormalize images for visualization
         def denormalize(x):
             return x  # Images are already in [-1, 1] range
-        
+
         comparison = torch.cat([
-            denormalize(batch['image'][:n_samples]),
-            denormalize(batch['masked_image'][:n_samples]),
+            denormalize(imgs),
+            denormalize(vis_masked),
             denormalize(outputs['reconstruction'][:n_samples])
         ], dim=0)
         
         grid = vutils.make_grid(comparison, nrow=n_samples, normalize=True, value_range=(-1, 1))
         
-        if self.config['logging']['use_wandb']:
+        if self.config.logging.use_wandb:
             wandb.log({"samples": wandb.Image(grid)}, step=self.global_step)
         
         if self.writer is not None:
             self.writer.add_image("samples", grid, self.global_step)
         
         # Save to file periodically
-        if self.global_step % (self.config['logging']['sample_interval'] * 10) == 0:
+        if self.global_step % (self.config.logging.sample_interval * 10) == 0:
             os.makedirs('results/samples', exist_ok=True)
             save_path = f'results/samples/step_{self.global_step}.png'
             vutils.save_image(grid, save_path)
@@ -362,5 +392,5 @@ class Trainer:
         if self.writer is not None:
             self.writer.close()
         
-        if self.config['logging']['use_wandb']:
+        if self.config.logging.use_wandb:
             wandb.finish()

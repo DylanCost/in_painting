@@ -32,35 +32,13 @@ cd vae-inpainting
 pip install -r requirements.txt
 ```
 
-### 2. Download CelebA Dataset
+### 2. Dataset Setup
 
-The CelebA dataset (~1.4GB) is required for training. We provide multiple download options:
+The CelebA dataset (~1.4GB) is **automatically downloaded** on first use via TorchVision's built-in functionality. No manual download steps are required!
 
-#### Option A: Automatic Download with torchvision (Recommended)
-```bash
-# Most reliable method using PyTorch's mirrors
-python scripts/download_celeba.py --use-torchvision
-```
+When you run training for the first time, the dataset will be automatically downloaded and cached in the configured data directory (`./assets/datasets/celeba/` by default). This may take a few minutes depending on your internet connection.
 
-#### Option B: Download from Google Drive (May have quota issues)
-```bash
-# Attempt direct download (may fail due to quotas)
-python scripts/download_celeba.py
-```
-
-#### Option C: Manual Download
-1. Visit [CelebA website](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html)
-2. Download `img_align_celeba.zip` (1.4GB) and `list_eval_partition.txt`
-3. Extract to `./data/celeba/`
-4. Verify: `python scripts/download_celeba.py --verify-only`
-
-#### Option D: Simple torchvision script
-```python
-# Alternative: Use this simple Python script
-import torchvision.datasets as datasets
-dataset = datasets.CelebA(root='./data', split='all', download=True)
-print(f"Downloaded {len(dataset)} images!")
-```
+**Note**: The automatic download uses PyTorch's reliable mirrors, so you won't encounter Google Drive quota issues.
 
 ### 3. Training
 
@@ -168,11 +146,20 @@ vae-inpainting/
 │   ├── train.py         # Main training script
 │   ├── evaluate.py      # Evaluation script
 │   ├── inpaint_demo.py  # Interactive demo
-│   ├── download_celeba.py  # Dataset download
 │   └── download_pretrained.py  # Get pretrained weights
 ├── weights/             # Model checkpoints
 └── results/             # Output images and metrics
 ```
+
+## Assets directory conventions
+
+- Datasets are stored under `./assets/datasets/{name}/`. For CelebA, expect `./assets/datasets/celeba/` containing:
+  - `img_align_celeba/`
+  - `Anno/`
+  - `list_eval_partition.txt`
+- Generated mask caches are stored under `./assets/masks/` and are ignored by Git.
+- Model weights and training logs are stored in `./weights/` and `./logs/` respectively, and are ignored by Git.
+- The repository's `.gitignore` excludes `assets/datasets/`, `assets/masks/`, `weights/`, and `logs/` while keeping source code and configuration files tracked.
 
 ## 🔧 Configuration
 
@@ -258,9 +245,9 @@ python scripts/evaluate.py --checkpoint weights/best_model.pt
 ## 🐛 Troubleshooting
 
 ### Dataset Download Issues
-- **Google Drive Quota**: Use `--use-torchvision` flag instead
-- **Slow Download**: The dataset is 1.4GB, ensure stable connection
-- **Verification Failed**: Check you have 202,599 images in `data/celeba/img_align_celeba/`
+- **Slow Download**: The dataset is 1.4GB and downloads automatically on first use. Ensure you have a stable internet connection.
+- **Download Failed**: If the automatic download fails, check your internet connection and try running the training script again. The download will resume from where it left off.
+- **Verification**: The dataset should contain 202,599 images in `assets/datasets/celeba/img_align_celeba/` after successful download.
 
 ### Training Issues
 - **Out of Memory**: Reduce batch size or image size in config
@@ -276,7 +263,8 @@ pip install -r requirements.txt
 # Reduce batch_size in config/default.yaml
 
 # Fix: Dataset not found
-python scripts/download_celeba.py --use-torchvision
+# The dataset will download automatically on first training run
+# Ensure you have internet connection and sufficient disk space (~1.4GB)
 ```
 
 ## 📚 Citation
