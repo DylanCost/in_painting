@@ -10,7 +10,7 @@ Visual verification script for the data pipeline.
 - Saves side-by-side grids [clean, masked] for manual inspection
 
 Usage:
-    python scripts/test_data_pipeline.py --config config/default.yaml --num-samples 8 --device cuda
+    python scripts/test_data_pipeline.py --config default --num-samples 8 --device cuda
 """
 
 import argparse
@@ -20,12 +20,12 @@ import sys
 from typing import Dict
 
 import torch
-import yaml
 import torchvision.utils as vutils
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from config import default_config, pretrained_config
 from data.celeba_dataset import CelebADataset  # noqa: E402
 from masking import MaskGenerator  # noqa: E402
 
@@ -85,14 +85,16 @@ def dump_samples(
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize data pipeline with masks")
-    parser.add_argument("--config", type=str, default="config/default.yaml")
+    parser.add_argument("--config", type=str, choices=['default', 'pretrained'], default="default")
     parser.add_argument("--num-samples", type=int, default=8)
     parser.add_argument("--device", type=str, default=("cuda" if torch.cuda.is_available() else "cpu"))
     args = parser.parse_args()
 
     # Load config
-    with open(args.config, "r") as f:
-        config: Dict = yaml.safe_load(f)
+    if args.config == 'pretrained':
+        config = pretrained_config.copy()
+    else:
+        config = default_config.copy()
 
     device = torch.device(args.device)
     print(f"Using device: {device}")
@@ -101,10 +103,10 @@ def main():
     train_ds, val_ds, test_ds = CelebADataset.create_splits_from_config(config, download=True)
 
     # Build mask generators
-    train_mask_gen = MaskGenerator.for_train(config["mask"])
+    train_mask_gen = MaskGenerator.for_train(config.mask)
     eval_mask_gen = MaskGenerator.for_eval(
-        config["mask"],
-        cache_dir=config["mask"].get("cache_dir", "./data/masks")
+        config.mask,
+        cache_dir=config.mask.cache_dir
     )
 
     # Output directories

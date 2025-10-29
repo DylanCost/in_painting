@@ -2,7 +2,6 @@
 """Main training script for VAE inpainting."""
 
 import argparse
-import yaml
 import torch
 from torch.utils.data import DataLoader
 import sys
@@ -11,6 +10,7 @@ import os
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from config import default_config, pretrained_config, Config
 from data.celeba_dataset import CelebADataset
 from models.unet_vae import UNetVAE
 from losses.vae_loss import VAELoss
@@ -19,7 +19,8 @@ from training.trainer import Trainer
 
 def main():
     parser = argparse.ArgumentParser(description='Train VAE for inpainting')
-    parser.add_argument('--config', type=str, default='config/default.yaml')
+    parser.add_argument('--config', type=str, choices=['default', 'pretrained'], default='default',
+                        help='Configuration preset to use')
     parser.add_argument('--pretrained', type=str, default=None,
                         help='Path to pretrained VAE checkpoint')
     parser.add_argument('--pretrained_encoder', type=str,
@@ -32,25 +33,27 @@ def main():
     args = parser.parse_args()
     
     # Load configuration
-    with open(args.config, 'r') as f:
-        config = yaml.safe_load(f)
+    if args.config == 'pretrained':
+        config = pretrained_config.copy()
+    else:
+        config = default_config.copy()
     
     # Override with command line arguments
     if args.pretrained_encoder != 'none':
-        config['model']['pretrained_encoder'] = args.pretrained_encoder
-        config['model']['encoder_checkpoint'] = args.pretrained
-        config['model']['freeze_encoder_stages'] = args.freeze_encoder
+        config.model.pretrained_encoder = args.pretrained_encoder
+        config.model.encoder_checkpoint = args.pretrained
+        config.model.freeze_encoder_stages = args.freeze_encoder
     
     # Create model with pretrained options
     model = UNetVAE(
-        input_channels=config['model']['input_channels'],
-        latent_dim=config['model']['latent_dim'],
-        hidden_dims=config['model']['hidden_dims'],
-        use_attention=config['model']['use_attention'],
-        use_skip_connections=config['model']['use_skip_connections'],
-        pretrained_encoder=config['model'].get('pretrained_encoder'),
-        encoder_checkpoint=config['model'].get('encoder_checkpoint'),
-        freeze_encoder_stages=config['model'].get('freeze_encoder_stages', 0)
+        input_channels=config.model.input_channels,
+        latent_dim=config.model.latent_dim,
+        hidden_dims=config.model.hidden_dims,
+        use_attention=config.model.use_attention,
+        use_skip_connections=config.model.use_skip_connections,
+        pretrained_encoder=config.model.pretrained_encoder,
+        encoder_checkpoint=config.model.encoder_checkpoint,
+        freeze_encoder_stages=config.model.freeze_encoder_stages
     )
     
     # Load pretrained VAE weights if provided
@@ -72,17 +75,17 @@ def main():
     # Create data loaders
     train_loader = DataLoader(
         train_dataset,
-        batch_size=config['training']['batch_size'],
+        batch_size=config.training.batch_size,
         shuffle=True,
-        num_workers=config['data']['num_workers'],
+        num_workers=config.data.num_workers,
         pin_memory=True
     )
     
     val_loader = DataLoader(
         val_dataset,
-        batch_size=config['training']['batch_size'],
+        batch_size=config.training.batch_size,
         shuffle=False,
-        num_workers=config['data']['num_workers'],
+        num_workers=config.data.num_workers,
         pin_memory=True
     )
     
@@ -91,9 +94,9 @@ def main():
     
     # Create loss function
     loss_fn = VAELoss(
-        kl_weight=config['training']['kl_weight'],
-        perceptual_weight=config['training']['perceptual_weight'],
-        adversarial_weight=config['training']['adversarial_weight']
+        kl_weight=config.training.kl_weight,
+        perceptual_weight=config.training.perceptual_weight,
+        adversarial_weight=config.training.adversarial_weight
     )
     
     # Create trainer
@@ -103,7 +106,7 @@ def main():
         val_loader=val_loader,
         loss_fn=loss_fn,
         config=config,
-        mask_config=config['mask'],
+        mask_config=config.mask,
         device=device
     )
     

@@ -74,17 +74,16 @@ class CelebADataset(Dataset):
     # Factory methods
     # -------------------------
     @classmethod
-    def from_config(cls, config: Dict[str, Any], split: str = 'train', download: bool = True) -> "CelebADataset":
+    def from_config(cls, config, split: str = 'train', download: bool = True) -> "CelebADataset":
         """
-        Construct a dataset from YAML/Dict configuration.
+        Construct a dataset from Config object.
 
-        Expected config keys:
-            config['data']['data_path']: str
-            config['data']['image_size']: int
+        Expected config attributes:
+            config.data.data_path: str
+            config.data.image_size: int
         """
-        data_cfg = config.get('data', {})
-        root_dir = data_cfg.get('data_path', './data/celeba')
-        image_size = int(data_cfg.get('image_size', 256))
+        root_dir = config.data.data_path
+        image_size = int(config.data.image_size)
 
         # Optionally support transform customization in future; default for now
         return cls(

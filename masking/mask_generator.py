@@ -46,14 +46,15 @@ class MaskGenerator:
     # Class-level factories
     # -------------------------
     @classmethod
-    def from_config(cls, config: Dict[str, Any], deterministic: bool = False) -> "MaskGenerator":
+    def from_config(cls, config, deterministic: bool = False) -> "MaskGenerator":
+        """Create MaskGenerator from MaskConfig object."""
         return cls(
-            mask_type=config.get('type', 'random'),
-            mask_ratio=config.get('mask_ratio', 0.4),
-            min_size=config.get('min_size', 32),
-            max_size=config.get('max_size', 128),
-            seed=config.get('seed', None),
-            cache_dir=config.get('cache_dir', None),
+            mask_type=config.type,
+            mask_ratio=config.mask_ratio,
+            min_size=config.min_size,
+            max_size=config.max_size,
+            seed=config.seed,
+            cache_dir=config.cache_dir,
             deterministic=deterministic,
         )
 
@@ -65,14 +66,16 @@ class MaskGenerator:
         return cls.from_config(config, deterministic=False)
 
     @classmethod
-    def for_eval(cls, config: Dict[str, Any], cache_dir: Optional[str] = None) -> "MaskGenerator":
+    def for_eval(cls, config, cache_dir: Optional[str] = None) -> "MaskGenerator":
         """
         Factory for deterministic masks during validation/test.
         """
-        cfg = dict(config)
+        # Create a copy if we need to override cache_dir
         if cache_dir is not None:
-            cfg['cache_dir'] = cache_dir
-        return cls.from_config(cfg, deterministic=True)
+            from copy import deepcopy
+            config = deepcopy(config)
+            config.cache_dir = cache_dir
+        return cls.from_config(config, deterministic=True)
 
     # -------------------------
     # Public API
