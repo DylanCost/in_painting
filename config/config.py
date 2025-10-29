@@ -41,7 +41,7 @@ class TrainingConfig:
 class DataConfig:
     """Dataset configuration."""
     dataset: str = "celeba"
-    data_path: str = "./assets/datasets/celeba"
+    data_path: str = "./assets/datasets"
     image_size: int = 256
     num_workers: int = 4
     augmentation: bool = True
