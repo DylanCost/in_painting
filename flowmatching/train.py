@@ -28,11 +28,11 @@ import torch
 import torch.nn as nn
 
 from .models import create_unet
+from .data.dataset import create_dataloaders
 from .training.trainer import Trainer
 
 root_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(root_dir))
-from data.celeba_dataset import create_dataloaders
 
 # Configure logging
 logging.basicConfig(
@@ -72,7 +72,7 @@ def parse_args():
     parser.add_argument(
         "--data_root",
         type=str,
-        default="./data",
+        default="./assets/datasets",
         help="Root directory for CelebA dataset",
     )
     parser.add_argument(
