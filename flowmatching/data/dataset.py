@@ -248,7 +248,7 @@ def create_train_val_datasets(
         For the official validation set, use split='valid' directly.
     """
     # Create full training dataset
-    full_dataset = CelebAInpainting(
+    train_dataset = CelebAInpainting(
         root=root,
         split="train",
         image_size=image_size,
@@ -257,15 +257,13 @@ def create_train_val_datasets(
         download=download,
     )
 
-    # Calculate split sizes
-    total_size = len(full_dataset)
-    train_size = int(train_ratio * total_size)
-    val_size = total_size - train_size
-
-    # Create random split with fixed seed for reproducibility
-    generator = torch.Generator().manual_seed(seed)
-    train_dataset, val_dataset = random_split(
-        full_dataset, [train_size, val_size], generator=generator
+    val_dataset = CelebAInpainting(
+        root=root,
+        split="val",
+        image_size=image_size,
+        min_mask_size=min_mask_size,
+        max_mask_size=max_mask_size,
+        download=download,
     )
 
     # Wrap in CelebAInpainting-like interface
