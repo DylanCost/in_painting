@@ -15,8 +15,7 @@ import sys
 # Add parent directory to path to import CelebADataset
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data.celeba_dataset import CelebADataset
-
-from .masking import RandomRectangularMask
+from masking.mask_generator import MaskGenerator
 
 
 class CelebAInpainting(Dataset):
@@ -64,6 +63,7 @@ class CelebAInpainting(Dataset):
         normalize: bool = True,
         mask_type: str = "random",
         mask_seed: Optional[int] = None,
+        cache_dir: Optional[str] = None,
     ):
         """Initialize CelebA inpainting dataset.
 
@@ -78,6 +78,7 @@ class CelebAInpainting(Dataset):
             normalize: Whether to normalize to [-1, 1]
             mask_type: Type of mask to generate ('random', 'center', 'irregular')
             mask_seed: Random seed for reproducible mask generation (optional)
+            cache_dir: Directory for caching deterministic masks (optional)
         """
         self.root = root
         self.split = split
@@ -119,13 +120,15 @@ class CelebAInpainting(Dataset):
         )
 
         # Initialize mask generator
-        self.mask_generator = RandomRectangularMask(
-            image_size=image_size,
+        # Use deterministic masks for validation and test splits
+        deterministic = split in ["valid", "test"]
+        self.mask_generator = MaskGenerator(
+            mask_type=mask_type,
             min_size=min_mask_size,
             max_size=max_mask_size,
-            channels=1,
-            mask_type=mask_type,
             seed=mask_seed,
+            cache_dir=cache_dir,
+            deterministic=deterministic,
         )
 
     def __len__(self) -> int:
@@ -146,10 +149,27 @@ class CelebAInpainting(Dataset):
         # Load image from CelebADataset (returns dict with 'image', 'filename', 'idx')
         sample = self.celeba[idx]
         image = sample["image"]
+        filename = sample["filename"]
 
-        # Generate random mask
-        mask = self.mask_generator.generate_mask(batch_size=1, device=image.device)
-        mask = mask.squeeze(0)  # Remove batch dimension: [1, H, W]
+        # Generate mask - deterministic for val/test, random for train
+        if self.mask_generator.deterministic:
+            # Use filename-based deterministic mask generation
+            # Returns [1, 1, H, W] for single filename
+            mask = self.mask_generator.generate_for_filenames(
+                [filename], shape=(1, self.image_size, self.image_size)
+            )
+            mask = mask.squeeze(0)  # Remove batch dimension: [1, 1, H, W] -> [1, H, W]
+        else:
+            # Random mask generation for training
+            # generate() with shape (1, H, W) returns [1, 1, H, W]
+            mask = self.mask_generator.generate(
+                shape=(1, self.image_size, self.image_size)
+            )
+            mask = mask.squeeze(0)  # Remove extra dimension: [1, 1, H, W] -> [1, H, W]
+
+        # Move mask to same device as image
+        if mask.device != image.device:
+            mask = mask.to(image.device)
 
         # Return original image - flow matching will handle the masking
         # by interpolating masked regions with noise

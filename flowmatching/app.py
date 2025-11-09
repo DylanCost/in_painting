@@ -23,9 +23,10 @@ import io
 
 # Import project modules
 from flowmatching.models import create_unet
-from flowmatching.data import CelebAInpainting, RandomRectangularMask
+from flowmatching.data import CelebAInpainting
 from flowmatching.flow import ODESampler, HeunSampler
 from flowmatching.training.metrics import compute_psnr, compute_ssim, denormalize_image
+from masking.mask_generator import MaskGenerator
 import torchvision.transforms.functional as TF
 
 
@@ -285,8 +286,11 @@ def main():
     if "current_mask" not in st.session_state:
         st.session_state.current_mask = None
     if "mask_generator" not in st.session_state:
-        st.session_state.mask_generator = RandomRectangularMask(
-            image_size=128, min_size=min_mask_size, max_size=max_mask_size
+        st.session_state.mask_generator = MaskGenerator(
+            mask_type="random",
+            min_size=min_mask_size,
+            max_size=max_mask_size,
+            deterministic=False,
         )
 
     # Update mask generator if settings changed
@@ -294,8 +298,11 @@ def main():
         st.session_state.mask_generator.min_size != min_mask_size
         or st.session_state.mask_generator.max_size != max_mask_size
     ):
-        st.session_state.mask_generator = RandomRectangularMask(
-            image_size=128, min_size=min_mask_size, max_size=max_mask_size
+        st.session_state.mask_generator = MaskGenerator(
+            mask_type="random",
+            min_size=min_mask_size,
+            max_size=max_mask_size,
+            deterministic=False,
         )
 
     # Main content area
@@ -328,11 +335,9 @@ def main():
                 st.session_state.current_image = sample["image"]
 
                 # Generate new mask
-                st.session_state.current_mask = (
-                    st.session_state.mask_generator.generate_mask(
-                        batch_size=1, device=st.session_state.current_image.device
-                    ).squeeze(0)
-                )
+                mask = st.session_state.mask_generator.generate(shape=(1, 128, 128))
+                # Squeeze to get [1, H, W]
+                st.session_state.current_mask = mask.squeeze(0)
 
         else:  # Upload Image
             uploaded_file = st.file_uploader(
@@ -355,11 +360,9 @@ def main():
 
                 # Generate mask if needed
                 if st.session_state.current_mask is None or generate_mask:
-                    st.session_state.current_mask = (
-                        st.session_state.mask_generator.generate_mask(
-                            batch_size=1, device=st.session_state.current_image.device
-                        ).squeeze(0)
-                    )
+                    mask = st.session_state.mask_generator.generate(shape=(1, 128, 128))
+                    # Squeeze to get [1, H, W]
+                    st.session_state.current_mask = mask.squeeze(0)
 
         # Generate new mask if requested
         if generate_mask and st.session_state.current_image is not None:
@@ -367,11 +370,9 @@ def main():
                 torch.manual_seed(seed)
                 np.random.seed(seed)
 
-            st.session_state.current_mask = (
-                st.session_state.mask_generator.generate_mask(
-                    batch_size=1, device=st.session_state.current_image.device
-                ).squeeze(0)
-            )
+            mask = st.session_state.mask_generator.generate(shape=(1, 128, 128))
+            # Squeeze to get [1, H, W]
+            st.session_state.current_mask = mask.squeeze(0)
 
         # Process and display results
         if st.session_state.current_image is not None:

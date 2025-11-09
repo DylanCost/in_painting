@@ -29,7 +29,7 @@ Example usage:
 __version__ = "0.1.0"
 
 # Import key classes for convenience
-from .data import CelebAInpainting, RandomRectangularMask
+from .data import CelebAInpainting
 from .models import UNet, create_unet
 from .flow import FlowMatching, ODESampler, HeunSampler
 from .training import Trainer, CheckpointManager
@@ -37,7 +37,6 @@ from .training import Trainer, CheckpointManager
 __all__ = [
     # Data
     "CelebAInpainting",
-    "RandomRectangularMask",
     # Models
     "UNet",
     "create_unet",
