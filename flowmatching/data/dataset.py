@@ -5,7 +5,7 @@ random masking for the inpainting task.
 """
 
 import torch
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader, random_split, Subset
 from torchvision import transforms
 from torchvision.datasets import CelebA
 from typing import Dict, Optional, Tuple, Literal
@@ -182,6 +182,7 @@ class CelebAInpainting(Dataset):
         num_workers: int = 4,
         pin_memory: bool = True,
         drop_last: bool = None,
+        subsample_fraction: float = 1.0,
     ) -> DataLoader:
         """Create a DataLoader for this dataset.
 
@@ -191,6 +192,7 @@ class CelebAInpainting(Dataset):
             num_workers: Number of worker processes
             pin_memory: Whether to pin memory for faster GPU transfer
             drop_last: Whether to drop last incomplete batch (default: True for train)
+            subsample_fraction: Fraction of dataset to use (default: 1.0 for full dataset)
 
         Returns:
             DataLoader instance
@@ -202,6 +204,9 @@ class CelebAInpainting(Dataset):
             ...     images = batch['image']
             ...     masks = batch['mask']
             ...     # Training code here
+
+            >>> # Use only 10% of data for debugging
+            >>> loader = dataset.get_dataloader(batch_size=32, subsample_fraction=0.1)
         """
         # Set defaults based on split
         if shuffle is None:
@@ -209,8 +214,16 @@ class CelebAInpainting(Dataset):
         if drop_last is None:
             drop_last = self.split == "train"
 
+        # Apply subsampling if requested
+        dataset = self
+        if subsample_fraction < 1.0:
+            total_samples = len(self)
+            subsample_size = int(total_samples * subsample_fraction)
+            indices = list(range(subsample_size))
+            dataset = Subset(self, indices)
+
         return DataLoader(
-            self,
+            dataset,
             batch_size=batch_size,
             shuffle=shuffle,
             num_workers=num_workers,

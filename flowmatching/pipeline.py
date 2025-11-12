@@ -60,6 +60,7 @@ class FlowMatchingConfig:
     weight_decay: float = 1e-2
     warmup_steps: int = 1000
     min_lr: float = 1e-6
+    subsample_fraction: float = 1.0  # Fraction of training data to use (for debugging)
 
     # Validation parameters
     val_timesteps: List[float] = field(default_factory=lambda: [0.25, 0.5, 0.75])
@@ -146,11 +147,7 @@ def save_config_snapshot(config: PipelineConfig, run_dir: Path):
         run_dir: Run directory
     """
     config_dict = {
-        "common": {
-            "data": asdict(config.common.data),
-            "mask": asdict(config.common.mask),
-            "logging": asdict(config.common.logging),
-        },
+        "common": asdict(config.common),
         "flowmatching": asdict(config.flowmatching),
     }
 
@@ -210,6 +207,7 @@ def create_data_loaders(
         batch_size=config.flowmatching.batch_size,
         shuffle=True,
         num_workers=config.common.data.num_workers,
+        subsample_fraction=config.flowmatching.subsample_fraction,
     )
 
     val_loader = val_dataset.get_dataloader(
@@ -688,6 +686,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument(
+        "--subsample_fraction",
+        type=float,
+        default=1.0,
+        help="Fraction of training data to use (for debugging)",
+    )
 
     # Model arguments
     parser.add_argument(
@@ -765,6 +769,7 @@ def main():
     config.flowmatching.compute_lpips = args.compute_lpips
     config.flowmatching.device = args.device
     config.flowmatching.seed = args.seed
+    config.flowmatching.subsample_fraction = args.subsample_fraction
 
     # Save configuration
     save_config_snapshot(config, run_dir)
@@ -778,6 +783,10 @@ def main():
     logger.info("Creating data loaders...")
     train_loader, val_loader, test_loader = create_data_loaders(config)
     logger.info(f"Train samples: {len(train_loader.dataset)}")
+    if config.flowmatching.subsample_fraction < 1.0:
+        logger.info(
+            f"  (subsampled to {config.flowmatching.subsample_fraction:.1%} of full dataset)"
+        )
     logger.info(f"Val samples: {len(val_loader.dataset)}")
     logger.info(f"Test samples: {len(test_loader.dataset)}")
 
