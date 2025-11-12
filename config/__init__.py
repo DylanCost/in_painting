@@ -1,27 +1,33 @@
 """Configuration module for VAE inpainting project."""
 
-from config.config import (
+from config.common_config import (
     Config,
-    ModelConfig,
-    TrainingConfig,
+    UNetConfig,
     DataConfig,
     MaskConfig,
     LoggingConfig,
 )
+from config.vae_config import (
+    VAEConfig,
+    VAEModelConfig,
+    VAETrainingConfig,
+)
 
 # Pre-instantiated default configuration
-default_config = Config.get_default()
+default_config = VAEConfig.get_default()
 
 # Pre-instantiated pretrained configuration
-pretrained_config = Config.get_pretrained()
+pretrained_config = VAEConfig.get_pretrained()
 
 __all__ = [
     "Config",
-    "ModelConfig",
-    "TrainingConfig",
+    "UNetConfig",
     "DataConfig",
     "MaskConfig",
     "LoggingConfig",
+    "VAEConfig",
+    "VAEModelConfig",
+    "VAETrainingConfig",
     "default_config",
     "pretrained_config",
 ]
