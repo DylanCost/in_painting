@@ -49,10 +49,6 @@ from flowmatching.data.dataset import CelebAInpainting
 class FlowMatchingConfig:
     """Flow matching specific configuration."""
 
-    # Model parameters
-    base_channels: int = 64
-    time_embed_dim: int = 256
-
     # Training parameters
     epochs: int = 100
     batch_size: int = 32
@@ -248,13 +244,13 @@ def train_model(
     """
     logger.info("Initializing model...")
 
-    # Create model
+    # Create model using common config
     model = create_unet(
         image_size=config.common.data.image_size,
         in_channels=4,  # RGB + mask
         out_channels=3,  # RGB velocity
-        base_channels=config.flowmatching.base_channels,
-        time_embed_dim=config.flowmatching.time_embed_dim,
+        base_channels=config.common.unet.hidden_dims[0],
+        time_embed_dim=256,  # Flow matching specific parameter
     )
 
     logger.info(f"Model parameters: {model.get_num_parameters():,}")
@@ -291,20 +287,9 @@ def train_model(
         warmup_steps=config.flowmatching.warmup_steps,
     )
 
-    # Train
+    # Train and get history
     logger.info(f"Starting training for {config.flowmatching.epochs} epochs...")
-    trainer.train(num_epochs=config.flowmatching.epochs)
-
-    # Get training history from trainer
-    # Note: We need to extract this from the trainer's logged metrics
-    # For now, we'll create a placeholder history
-    history = {
-        "train_loss": [],
-        "val_loss": [],
-        "val_psnr": [],
-        "val_ssim": [],
-        "learning_rate": [],
-    }
+    history = trainer.train(num_epochs=config.flowmatching.epochs)
 
     # Get best checkpoint
     best_checkpoint = trainer.checkpoint_manager.get_best_checkpoint()
@@ -452,13 +437,13 @@ def load_model_from_checkpoint(
     Returns:
         Loaded model
     """
-    # Create model
+    # Create model using common config
     model = create_unet(
         image_size=config.common.data.image_size,
         in_channels=4,
         out_channels=3,
-        base_channels=config.flowmatching.base_channels,
-        time_embed_dim=config.flowmatching.time_embed_dim,
+        base_channels=config.common.unet.hidden_dims[0],
+        time_embed_dim=256,  # Flow matching specific parameter
     )
 
     # Load checkpoint
@@ -663,8 +648,11 @@ def generate_triptychs(
     logger.info(f"Saved {len(all_triptychs)} triptychs to {examples_dir}")
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(config: PipelineConfig) -> argparse.Namespace:
     """Parse command-line arguments.
+
+    Args:
+        config: Pipeline configuration with default values
 
     Returns:
         Parsed arguments
@@ -675,56 +663,75 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data_root",
         type=str,
-        default="./assets/datasets",
+        default=config.common.data.data_path,
         help="Root directory for dataset",
     )
-    parser.add_argument("--image_size", type=int, default=128, help="Image size")
+    parser.add_argument(
+        "--image_size",
+        type=int,
+        default=config.common.data.image_size,
+        help="Image size",
+    )
 
     # Training arguments
     parser.add_argument(
-        "--epochs", type=int, default=100, help="Number of training epochs"
+        "--epochs",
+        type=int,
+        default=config.flowmatching.epochs,
+        help="Number of training epochs",
     )
-    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
-    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=config.flowmatching.batch_size,
+        help="Batch size",
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=config.flowmatching.learning_rate,
+        help="Learning rate",
+    )
     parser.add_argument(
         "--subsample_fraction",
         type=float,
-        default=1.0,
+        default=config.flowmatching.subsample_fraction,
         help="Fraction of training data to use (for debugging)",
-    )
-
-    # Model arguments
-    parser.add_argument(
-        "--base_channels", type=int, default=64, help="Base number of channels"
-    )
-    parser.add_argument(
-        "--time_embed_dim", type=int, default=256, help="Time embedding dimension"
     )
 
     # Evaluation arguments
     parser.add_argument(
         "--num_eval_samples",
         type=int,
-        default=1000,
+        default=config.flowmatching.num_eval_samples,
         help="Number of test samples to evaluate",
     )
     parser.add_argument(
         "--num_example_images",
         type=int,
-        default=8,
+        default=config.flowmatching.num_example_images,
         help="Number of example triptychs to generate",
     )
     parser.add_argument(
         "--compute_lpips",
         action="store_true",
+        default=config.flowmatching.compute_lpips,
         help="Compute LPIPS metric (requires lpips package)",
     )
 
     # Device
     parser.add_argument(
-        "--device", type=str, default="cuda", help="Device to use (cuda/cpu)"
+        "--device",
+        type=str,
+        default=config.flowmatching.device,
+        help="Device to use (cuda/cpu)",
     )
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=config.flowmatching.seed,
+        help="Random seed",
+    )
 
     return parser.parse_args()
 
@@ -732,17 +739,33 @@ def parse_args() -> argparse.Namespace:
 def main():
     """Main pipeline execution."""
 
-    # Parse arguments
-    args = parse_args()
-
     # Print header
     print("=" * 80)
     print("Flow Matching Inpainting Pipeline")
     print("=" * 80)
 
+    # Create configuration
+    config = PipelineConfig()
+
+    # Parse arguments with config defaults
+    args = parse_args(config)
+
+    # Update config with parsed arguments
+    config.common.data.data_path = args.data_root
+    config.common.data.image_size = args.image_size
+    config.flowmatching.epochs = args.epochs
+    config.flowmatching.batch_size = args.batch_size
+    config.flowmatching.learning_rate = args.lr
+    config.flowmatching.num_eval_samples = args.num_eval_samples
+    config.flowmatching.num_example_images = args.num_example_images
+    config.flowmatching.compute_lpips = args.compute_lpips
+    config.flowmatching.device = args.device
+    config.flowmatching.seed = args.seed
+    config.flowmatching.subsample_fraction = args.subsample_fraction
+
     # Set random seed
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
+    torch.manual_seed(config.flowmatching.seed)
+    np.random.seed(config.flowmatching.seed)
 
     # Create run directory
     run_dir, timestamp = create_run_directory()
@@ -753,30 +776,14 @@ def main():
     logger.info("Starting flow matching pipeline")
     logger.info(f"Run directory: {run_dir}")
 
-    # Create configuration
-    config = PipelineConfig()
-
-    # Override with command-line arguments
-    config.common.data.data_path = args.data_root
-    config.common.data.image_size = args.image_size
-    config.flowmatching.epochs = args.epochs
-    config.flowmatching.batch_size = args.batch_size
-    config.flowmatching.learning_rate = args.lr
-    config.flowmatching.base_channels = args.base_channels
-    config.flowmatching.time_embed_dim = args.time_embed_dim
-    config.flowmatching.num_eval_samples = args.num_eval_samples
-    config.flowmatching.num_example_images = args.num_example_images
-    config.flowmatching.compute_lpips = args.compute_lpips
-    config.flowmatching.device = args.device
-    config.flowmatching.seed = args.seed
-    config.flowmatching.subsample_fraction = args.subsample_fraction
-
     # Save configuration
     save_config_snapshot(config, run_dir)
     logger.info("Configuration saved")
 
     # Set device
-    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    device = torch.device(
+        config.flowmatching.device if torch.cuda.is_available() else "cpu"
+    )
     logger.info(f"Using device: {device}")
 
     # Create data loaders
