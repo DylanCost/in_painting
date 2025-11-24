@@ -25,7 +25,7 @@ class CelebADataset(TorchvisionCelebA):
         self,
         root_dir: str,
         split: str = 'train',
-        image_size: int = 256,
+        image_size: int = 128,
         transform: Optional[transforms.Compose] = None,
         download: bool = False,
         verify_integrity: bool = True,

@@ -2,6 +2,8 @@ import os
 import torch
 import copy
 
+from diffusion_evaluate import run_evaluation
+
 class DiffusionTrainer:
     """
     Trainer for diffusion inpainting model with optional Exponential Moving Average (EMA) stabilization.
@@ -9,7 +11,7 @@ class DiffusionTrainer:
 
     def __init__(self, model, train_loader, val_loader, loss_fn, noise_scheduler,
                  config, device, train_mask_generator, val_mask_generator, patience,
-                 use_ema=True):
+                 use_ema=False):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -25,7 +27,7 @@ class DiffusionTrainer:
         # Optimizer
         self.optimizer = torch.optim.AdamW(
             self.model.parameters(),
-            lr=config.training.learning_rate,
+            lr=config.data.learning_rate,
             betas=(0.9, 0.999),
             weight_decay=0.01
         )
@@ -33,12 +35,12 @@ class DiffusionTrainer:
         # Cosine LR scheduler
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer,
-            T_max=config.training.epochs,
+            T_max=config.data.epochs,
             eta_min=1e-6
         )
 
         # Training parameters
-        self.num_epochs = config.training.epochs
+        self.num_epochs = config.data.epochs
         self.num_epochs = 60
         self.num_timesteps = noise_scheduler.num_timesteps
 
@@ -175,12 +177,20 @@ class DiffusionTrainer:
         """Full training loop with early stopping and checkpointing."""
         best_val_loss = float('inf')
         epochs_no_improve = 0
+        full_val_epoch = 25
+        all_psnr = []
+        all_ssim = []
+        all_mse = []
+        all_mae = []
+
 
         print("\n🚀 Starting training...")
         # print(f"EMA Status: {'ENABLED' if self.use_ema else 'DISABLED'}")
         print("-" * 60)
 
         for epoch in range(1, self.num_epochs + 1):
+            if epoch > 2:
+                break
             print(f"\nEpoch {epoch}/{self.num_epochs}")
             print("-" * 50)
 
@@ -204,9 +214,17 @@ class DiffusionTrainer:
             #     print(f"\n⏹️ Early stopping after {epoch} epochs (no improvement for {self.patience})")
             #     break
 
+            if (epoch-1) % full_val_epoch == 0:
+                metrics = run_evaluation(self.model, self.val_loader, self.noise_scheduler, self.val_mask_generator, self.device)
+                all_psnr.append(metrics['psnr'])
+                all_ssim.append(metrics['ssim'])
+                all_mse.append(metrics['mse'])
+                all_mae.append(metrics['mae'])
+
         self.save_checkpoint(epoch, "diffusion_final_model.pt")
         print("💾 Final model saved after all epochs.")
         print(f"\n🏁 Training complete — Best validation loss: {best_val_loss:.4f}")
+        return all_psnr, all_ssim, all_mse, all_mae
 
     # -------------------------------------------------------------------------
     # Checkpointing

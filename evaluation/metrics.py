@@ -36,7 +36,7 @@ class InpaintingMetrics:
         
         ssim_values = []
         for p, t in zip(pred_np, target_np):
-            ssim_val = structural_similarity(p, t, multichannel=True, data_range=2.0)
+            ssim_val = structural_similarity(p, t, channel_axis=-1, data_range=2.0)
             ssim_values.append(ssim_val)
         
         return np.mean(ssim_values)

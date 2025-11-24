@@ -13,7 +13,7 @@ from config import Config
 from noise_scheduler_config import NoiseConfig
 from data.celeba_dataset import CelebADataset
 from unet_diffusion import UNetDiffusion, NoiseScheduler
-from scripts.mask_generator import MaskGenerator
+from masking.mask_generator import MaskGenerator
 from evaluation.metrics import InpaintingMetrics
 
 
@@ -102,7 +102,7 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     
     # Collect metrics
     all_psnr = []
-    all_lpips = []
+    all_ssim = []
     all_mse = []
     all_mae = []
     
@@ -111,6 +111,8 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     os.makedirs(out_dir, exist_ok=True)
 
     for batch_idx, batch in enumerate(tqdm(test_loader, desc="Evaluating")):
+        if batch_idx > 2:
+            break
         images = batch['image'].to(device)
         filenames = batch['filename']
         
@@ -121,11 +123,6 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
             filenames=filenames,
             shape=(1, H, W)
         ).to(device)
-
-        # ADD THIS DEBUG:
-        print(f"Mask shape: {masks.shape}")
-        print(f"Mask unique values: {masks.unique()}")
-        print(f"Mask mean (should be ~0.1-0.3 if 1=inpaint): {masks.mean():.3f}")
         
         # Add full noise to masked regions (start from complete noise)
         t = torch.full((B,), noise_scheduler.num_timesteps - 1, device=device)
@@ -137,14 +134,14 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
         
         # Compute all metrics on full images
         psnr_val = metrics_calc.psnr(inpainted, images)
-        lpips_val = metrics_calc.lpips_distance(inpainted, images)
+        ssim_val = metrics_calc.ssim(inpainted, images)
         
         # Compute MSE and MAE
         mse_val = torch.mean((inpainted - images) ** 2).item()
         mae_val = torch.mean(torch.abs(inpainted - images)).item()
         
         all_psnr.append(psnr_val)
-        all_lpips.append(lpips_val)
+        all_ssim.append(ssim_val)
         all_mse.append(mse_val)
         all_mae.append(mae_val)
         
@@ -169,43 +166,12 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
             print(f"\n✅ Saved sample images to {save_dir}/samples.png")
     
     # Compute summary statistics
-    results = {
-        'psnr_mean': np.mean(all_psnr),
-        'psnr_std': np.std(all_psnr),
-        'lpips_mean': np.mean(all_lpips),
-        'lpips_std': np.std(all_lpips),
-        'mse_mean': np.mean(all_mse),
-        'mse_std': np.std(all_mse),
-        'mae_mean': np.mean(all_mae),
-        'mae_std': np.std(all_mae)
+    return {
+        'psnr': np.mean(all_psnr),
+        'ssim': np.mean(all_ssim),
+        'mse': np.mean(all_mse),
+        'mae': np.mean(all_mae)
     }
-    
-    # Print results
-    print("\n" + "="*60)
-    print("DIFFUSION MODEL EVALUATION RESULTS")
-    print("="*60)
-    print(f"PSNR:  {results['psnr_mean']:.2f} ± {results['psnr_std']:.2f} dB")
-    print(f"LPIPS: {results['lpips_mean']:.4f} ± {results['lpips_std']:.4f}")
-    print(f"MSE:   {results['mse_mean']:.6f} ± {results['mse_std']:.6f}")
-    print(f"MAE:   {results['mae_mean']:.6f} ± {results['mae_std']:.6f}")
-    print("="*60)
-    
-    # Save results
-    results_file = os.path.join(save_dir, 'metrics.txt')
-    with open(results_file, 'w') as f:
-        f.write("="*60 + "\n")
-        f.write("DIFFUSION MODEL EVALUATION RESULTS\n")
-        f.write("="*60 + "\n")
-        f.write(f"PSNR:  {results['psnr_mean']:.2f} ± {results['psnr_std']:.2f} dB\n")
-        f.write(f"LPIPS: {results['lpips_mean']:.4f} ± {results['lpips_std']:.4f}\n")
-        f.write(f"MSE:   {results['mse_mean']:.6f} ± {results['mse_std']:.6f}\n")
-        f.write(f"MAE:   {results['mae_mean']:.6f} ± {results['mae_std']:.6f}\n")
-        f.write("="*60 + "\n")
-    
-    print(f"\n✅ Results saved to {results_file}")
-    
-    return results
-
 
 def evaluate():
     """Evaluate trained diffusion model on test set."""

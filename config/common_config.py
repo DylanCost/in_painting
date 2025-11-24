@@ -27,9 +27,12 @@ class DataConfig:
 
     dataset: str = "celeba"
     data_path: str = "./assets/datasets"
-    image_size: int = 256
+    image_size: int = 128
     num_workers: int = 4
     augmentation: bool = True
+    batch_size: int = 64
+    learning_rate: float = 0.0002
+    epochs: int = 100
 
 
 @dataclass

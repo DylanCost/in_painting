@@ -21,9 +21,6 @@ class UNetDiffusion(nn.Module):
         hidden_dims: List[int] = None,
         use_attention: bool = True,
         use_skip_connections: bool = True,
-        pretrained_encoder: Optional[str] = None,
-        encoder_checkpoint: Optional[str] = None,
-        freeze_encoder_stages: int = 0,
         input_size: int = 256,
         attention_resolutions: List[int] = None
     ):

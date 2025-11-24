@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 import sys
 import os
+import numpy as np
 
 # Ensure the project root (the directory containing diffusion/, data/, etc.) is in sys.path
 project_root = os.path.dirname(os.path.abspath(__file__))  # e.g. .../in_paint_structure/diffusion
@@ -16,7 +17,7 @@ from data.celeba_dataset import CelebADataset
 from unet_diffusion import UNetDiffusion, NoiseScheduler
 from diffusion_loss import DiffusionLossPerImage, DiffusionLoss
 from diffusion_trainer import DiffusionTrainer
-from scripts.mask_generator import MaskGenerator
+from masking.mask_generator import MaskGenerator
 
 
 def main():
@@ -30,13 +31,10 @@ def main():
     
 
     model = UNetDiffusion(
-        input_channels=config.model.input_channels,
-        hidden_dims=config.model.hidden_dims,
-        use_attention=config.model.use_attention,
-        use_skip_connections=config.model.use_skip_connections,
-        pretrained_encoder=config.model.pretrained_encoder,
-        encoder_checkpoint=config.model.encoder_checkpoint,
-        freeze_encoder_stages=config.model.freeze_encoder_stages
+        input_channels=config.unet.input_channels,
+        hidden_dims=config.unet.hidden_dims,
+        use_attention=config.unet.use_attention,
+        use_skip_connections=config.unet.use_skip_connections,
     )
 
     train_dataset = CelebADataset(
@@ -56,7 +54,7 @@ def main():
     
     train_loader = DataLoader(
         train_dataset,
-        batch_size=config.training.batch_size,
+        batch_size=config.data.batch_size,
         shuffle=True,
         num_workers=config.data.num_workers,
         pin_memory=True
@@ -64,7 +62,7 @@ def main():
     
     val_loader = DataLoader(
         val_dataset,
-        batch_size=config.training.batch_size,
+        batch_size=config.data.batch_size,
         shuffle=False,
         num_workers=config.data.num_workers,
         pin_memory=True
@@ -100,8 +98,16 @@ def main():
 
     # Start training
     print("Starting training...")
-    trainer.train()
+    all_psnr, all_ssim, all_mse, all_mae = trainer.train()
     print("Training completed!")
+    print("\n" + "="*60)
+    print("METRICS PER BATCH")
+    print("="*60)
+    print(f"PSNR values: {all_psnr}")
+    print(f"SSIM values: {all_ssim}")
+    print(f"MSE values:  {all_mse}")
+    print(f"MAE values:  {all_mae}")
+    print("="*60)
 
 if __name__ == '__main__':
     main()
