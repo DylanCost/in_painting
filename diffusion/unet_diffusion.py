@@ -55,33 +55,7 @@ class UNetDiffusion(nn.Module):
             nn.Linear(time_emb_dim, time_emb_dim),         # [B, 1024] → [B, 1024]
             nn.GELU(),
         )
-
-        # ---------- ENCODER SELECTION ----------
-        # if pretrained_encoder == "resnet":
-        #     self.encoder = PretrainedResNetEncoder(
-        #         model_name="resnet50",
-        #         pretrained="imagenet",
-        #         frozen_stages=freeze_encoder_stages,
-        #         output_channels=hidden_dims,
-        #     )
-        # elif pretrained_encoder == "vggface":
-        #     self.encoder = PretrainedResNetEncoder(
-        #         model_name="resnet50",
-        #         pretrained="vggface2",
-        #         frozen_stages=freeze_encoder_stages,
-        #         output_channels=hidden_dims,
-        #     )
-        # elif pretrained_encoder == "vae" and encoder_checkpoint:
-        #     self.encoder = PretrainedVAEEncoder(
-        #         checkpoint_path=encoder_checkpoint,
-        #         frozen=(freeze_encoder_stages > 0),
-        #     )
-        # elif pretrained_encoder == "stylegan":
-        #     self.encoder = PretrainedStyleGANEncoder(
-        #         model_path=encoder_checkpoint,
-        #         frozen_layers=freeze_encoder_stages,
-        #     )
-        # else:
+        
         self.encoder = UNetEncoder(
             input_channels=input_channels,
             hidden_dims=hidden_dims,

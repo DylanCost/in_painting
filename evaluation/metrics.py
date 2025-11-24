@@ -14,7 +14,7 @@ class InpaintingMetrics:
         self.device = device
         
         # LPIPS for perceptual distance
-        self.lpips = lpips.LPIPS(net='alex').to(device)
+        self.lpips = None
         
         # Inception model for FID
         self.inception = inception_v3(pretrained=True, transform_input=False).to(device)
@@ -43,6 +43,8 @@ class InpaintingMetrics:
     
     def lpips_distance(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         """Calculate LPIPS perceptual distance."""
+        if self.lpips is None:
+            self.lpips = lpips.LPIPS(net='alex').to(self.device)
         with torch.no_grad():
             distance = self.lpips(pred, target)
         return distance.mean().item()

@@ -49,8 +49,6 @@ def main():
         image_size=config.data.image_size,
         download=False
     )
-
-    #config.training.batch_size = 128
     
     train_loader = DataLoader(
         train_dataset,
