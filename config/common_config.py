@@ -27,7 +27,7 @@ class DataConfig:
 
     dataset: str = "celeba"
     data_path: str = "./assets/datasets"
-    image_size: int = 256
+    image_size: int = 128
     num_workers: int = 4
     augmentation: bool = True
 
