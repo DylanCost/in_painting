@@ -130,13 +130,26 @@ def parse_args():
         "--resume", type=str, default=None, help="Path to checkpoint to resume from"
     )
 
-    # Validation parameters
+    # Validation / sampler parameters
     parser.add_argument(
         "--val_timesteps",
         type=float,
         nargs="+",
         default=[0.25, 0.5, 0.75],
-        help="Timesteps to use for validation",
+        help="(Deprecated) Timesteps to use for validation (no longer used)",
+    )
+    parser.add_argument(
+        "--val_sampler",
+        type=str,
+        default="heun",
+        choices=["heun", "euler"],
+        help="Sampler to use for validation (heun or euler)",
+    )
+    parser.add_argument(
+        "--val_num_steps",
+        type=int,
+        default=50,
+        help="Number of ODE steps for validation sampler",
     )
 
     # Training parameters
@@ -260,6 +273,8 @@ def main():
         log_dir=args.log_dir,
         save_every=args.save_every,
         val_timesteps=args.val_timesteps,
+        val_sampler=args.val_sampler,
+        val_num_steps=args.val_num_steps,
         gradient_clip=args.gradient_clip,
         warmup_steps=args.warmup_steps,
     )
