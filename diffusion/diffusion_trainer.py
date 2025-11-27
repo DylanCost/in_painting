@@ -41,18 +41,17 @@ class DiffusionTrainer:
 
         # Training parameters
         self.num_epochs = config.data.epochs
-        self.num_epochs = 60
         self.num_timesteps = noise_scheduler.num_timesteps
 
         # --- EMA setup (optional) ---
-        if self.use_ema:
-            self.ema_decay = 0.9999
-            self.ema_model = copy.deepcopy(self.model).to(self.device)
-            self.ema_model.eval()
-            print("🟢 EMA is ENABLED — using exponential moving average with decay =", self.ema_decay)
-        else:
-            self.ema_model = None
-            print("🔴 EMA is DISABLED — training and validation will use raw model weights only.")
+        # if self.use_ema:
+        #     self.ema_decay = 0.9999
+        #     self.ema_model = copy.deepcopy(self.model).to(self.device)
+        #     self.ema_model.eval()
+        #     print("🟢 EMA is ENABLED — using exponential moving average with decay =", self.ema_decay)
+        # else:
+        #     self.ema_model = None
+        #     print("🔴 EMA is DISABLED — training and validation will use raw model weights only.")
 
         # Internal counters
         self.global_step = 0
@@ -60,13 +59,13 @@ class DiffusionTrainer:
     # -------------------------------------------------------------------------
     # EMA helper
     # -------------------------------------------------------------------------
-    @torch.no_grad()
-    def update_ema(self):
-        """Update exponential moving average of model parameters."""
-        if not self.use_ema:
-            return
-        for ema_param, param in zip(self.ema_model.parameters(), self.model.parameters()):
-            ema_param.data.mul_(self.ema_decay).add_(param.data, alpha=1 - self.ema_decay)
+    # @torch.no_grad()
+    # def update_ema(self):
+    #     """Update exponential moving average of model parameters."""
+    #     if not self.use_ema:
+    #         return
+    #     for ema_param, param in zip(self.ema_model.parameters(), self.model.parameters()):
+    #         ema_param.data.mul_(self.ema_decay).add_(param.data, alpha=1 - self.ema_decay)
 
     # -------------------------------------------------------------------------
     # Training epoch
@@ -108,7 +107,7 @@ class DiffusionTrainer:
             # ✓ Clip gradients to prevent explosion
             self.optimizer.step()                        # ✓ Update weights
             
-            self.update_ema()  # ✓ Update EMA model if enabled
+            # self.update_ema()  # ✓ Update EMA model if enabled
             
             total_loss += loss.item()  # ✓ Accumulate loss
             self.global_step += 1      # ✓ Increment global step counter
@@ -130,7 +129,7 @@ class DiffusionTrainer:
         """Validate using EMA weights if enabled, otherwise raw model."""
         
         # ✓ Select which model to evaluate (EMA provides more stable/better results)
-        model_to_eval = self.ema_model if self.use_ema else self.model
+        model_to_eval = self.model #self.ema_model if self.use_ema else self.model
         
         model_to_eval.eval()  # ✓ Set model to evaluation mode (disables dropout, batchnorm training)
         
@@ -189,7 +188,7 @@ class DiffusionTrainer:
         print("-" * 60)
 
         for epoch in range(1, self.num_epochs + 1):
-            if epoch > 2:
+            if epoch > 10:
                 break
             print(f"\nEpoch {epoch}/{self.num_epochs}")
             print("-" * 50)
