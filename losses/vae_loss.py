@@ -73,80 +73,69 @@ class VAELoss(nn.Module):
         
         return losses
 
-
 class PerceptualLoss(nn.Module):
     """Perceptual loss using VGG features."""
     
-    def __init__(self, feature_layers: list = None):
+    def __init__(self, layers=None):
         super().__init__()
         
-        if feature_layers is None:
-            feature_layers = ['relu1_2', 'relu2_2', 'relu3_3', 'relu4_3']
+        # Use VGG16 for feature extraction
+        vgg = models.vgg16(pretrained=True).features
+        vgg.eval()
         
-        # Load pretrained VGG19
-        vgg = models.vgg19(pretrained=True).features
-        
-        # Freeze parameters
+        # Freeze VGG parameters
         for param in vgg.parameters():
             param.requires_grad = False
         
-        # Extract feature layers
-        self.feature_extractor = nn.ModuleDict()
-        layer_idx = 0
-        
-        for name, layer in vgg.named_children():
-            if isinstance(layer, nn.Conv2d):
-                layer_idx += 1
-                name = f'conv{layer_idx}'
-            elif isinstance(layer, nn.ReLU):
-                name = f'relu{layer_idx}'
-                layer = nn.ReLU(inplace=False)
-            elif isinstance(layer, nn.MaxPool2d):
-                name = f'pool{layer_idx}'
+        # Default layers to use for perceptual loss
+        if layers is None:
+            # Use indices instead of names for reliability
+            self.layers = [3, 8, 15, 22]  # relu1_2, relu2_2, relu3_3, relu4_3
+        else:
+            self.layers = layers
             
-            self.feature_extractor[name] = layer
-            
-            if name in feature_layers:
-                break
-        
-        self.feature_layers = feature_layers
-        
-        # Normalization
-        self.register_buffer(
-            'mean',
-            torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
-        )
-        self.register_buffer(
-            'std',
-            torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
-        )
-    
-    def normalize(self, x: torch.Tensor) -> torch.Tensor:
-        """Normalize input for VGG."""
-        # Denormalize from [-1, 1] to [0, 1]
-        x = (x + 1) / 2
-        # Normalize for VGG
-        return (x - self.mean) / self.std
-    
-    def extract_features(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Extract VGG features."""
-        features = {}
-        x = self.normalize(x)
-        
-        for name, layer in self.feature_extractor.items():
-            x = layer(x)
-            if name in self.feature_layers:
-                features[name] = x
-        
-        return features
+        # Extract relevant layers
+        self.vgg_layers = nn.ModuleList()
+        last_idx = 0
+        for layer_idx in self.layers:
+            self.vgg_layers.append(nn.Sequential(*list(vgg.children())[last_idx:layer_idx+1]))
+            last_idx = layer_idx + 1
     
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        """Calculate perceptual loss."""
-        pred_features = self.extract_features(pred)
-        target_features = self.extract_features(target)
+        """
+        Calculate perceptual loss between predicted and target images.
         
-        loss = 0
-        for layer in self.feature_layers:
-            loss += F.l1_loss(pred_features[layer], target_features[layer])
+        Args:
+            pred: Predicted images (B, C, H, W) in range [-1, 1]
+            target: Target images (B, C, H, W) in range [-1, 1]
         
-        return loss / len(self.feature_layers)
+        Returns:
+            Perceptual loss
+        """
+        # Normalize from [-1, 1] to [0, 1]
+        pred = (pred + 1) / 2
+        target = (target + 1) / 2
+        
+        # Normalize for VGG (ImageNet statistics)
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(pred.device)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(pred.device)
+        
+        pred = (pred - mean) / std
+        target = (target - mean) / std
+        
+        loss = 0.0
+        
+        # Extract features at each layer and compute loss
+        pred_input = pred
+        target_input = target
+        
+        for vgg_layer in self.vgg_layers:
+            pred_features = vgg_layer(pred_input)
+            target_features = vgg_layer(target_input)
+            loss += F.l1_loss(pred_features, target_features)
+            
+            # Update inputs for next layer
+            pred_input = pred_features
+            target_input = target_features
+        
+        return loss / len(self.layers)

@@ -61,7 +61,7 @@ class MaskConfig:
 @dataclass
 class LoggingConfig:
     """Experiment tracking and logging configuration."""
-    use_wandb: bool = True
+    use_wandb: bool = False
     use_tensorboard: bool = True
     log_interval: int = 100
     save_interval: int = 5
