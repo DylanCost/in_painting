@@ -1,8 +1,18 @@
 import os
 import torch
 import copy
+import torchvision.utils as vutils
+import numpy as np
 
-from diffusion_evaluate import run_evaluation
+from config import Config
+from noise_scheduler_config import NoiseConfig
+from data.celeba_dataset import CelebADataset
+from unet_diffusion import UNetDiffusion, NoiseScheduler
+from masking.mask_generator import MaskGenerator
+from evaluation.metrics import InpaintingMetrics
+from diffusion.diffusion_evaluate import sample_ddpm
+
+# from diffusion_evaluate import run_evaluation
 
 class DiffusionTrainer:
     """
@@ -214,7 +224,7 @@ class DiffusionTrainer:
             #     break
 
             if (epoch-1) % full_val_epoch == 0:
-                metrics = run_evaluation(self.model, self.val_loader, self.noise_scheduler, self.val_mask_generator, self.device)
+                metrics = run_validation(self.model, self.val_loader, self.noise_scheduler, self.val_mask_generator, self.device)
                 all_psnr.append(metrics['psnr'])
                 all_ssim.append(metrics['ssim'])
                 all_mse.append(metrics['mse'])
@@ -246,3 +256,88 @@ class DiffusionTrainer:
         path = os.path.join(checkpoint_dir, filename)
         torch.save(checkpoint, path)
         print(f"💾 Checkpoint saved: {path}")
+
+def run_validation(model, test_loader, noise_scheduler, mask_generator, device, save_dir='results/diffusion'):
+    """
+    Run comprehensive evaluation on test set.
+    """
+    model.eval()
+    
+    # Create save directory
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Initialize metrics calculator
+    metrics_calc = InpaintingMetrics(device=device)
+    
+    # Collect metrics
+    all_psnr = []
+    all_ssim = []
+    all_mse = []
+    all_mae = []
+    
+    print("\nStarting evaluation...")
+    out_dir = "./runs/eval_debug"
+    os.makedirs(out_dir, exist_ok=True)
+
+    for batch_idx, batch in enumerate(tqdm(test_loader, desc="Evaluating")):
+        if batch_idx > 2:
+            break
+        images = batch['image'].to(device)
+        filenames = batch['filename']
+        
+        B, C, H, W = images.shape
+        
+        # Generate deterministic masks
+        masks = mask_generator.generate_for_filenames(
+            filenames=filenames,
+            shape=(1, H, W)
+        ).to(device)
+        
+        # Add full noise to masked regions (start from complete noise)
+        t = torch.full((B,), noise_scheduler.num_timesteps - 1, device=device)
+
+        noisy_images, _ = noise_scheduler.add_noise(images, t, masks)
+
+        # Denoise using DDPM sampling
+        inpainted = sample_ddpm(model, noise_scheduler, noisy_images, masks, num_timesteps=1000)
+        
+        # Compute all metrics on full images
+        psnr_val = metrics_calc.psnr(inpainted, images)
+        ssim_val = metrics_calc.ssim(inpainted, images)
+        
+        # Compute MSE and MAE
+        mse_val = torch.mean((inpainted - images) ** 2).item()
+        mae_val = torch.mean(torch.abs(inpainted - images)).item()
+        
+        all_psnr.append(psnr_val)
+        all_ssim.append(ssim_val)
+        all_mse.append(mse_val)
+        all_mae.append(mae_val)
+        
+        # Save first batch for visualization
+        if batch_idx == 0:
+            # Create masked input: show original with black mask region
+            masked_input = images * (1 - masks)  # Zero out masked region
+            
+            comparison = torch.cat([
+                images[:8],           # Row 1: Original
+                masked_input[:8],     # Row 2: Input with black mask
+                inpainted[:8]         # Row 3: Inpainted result
+            ], dim=0)
+            
+            vutils.save_image(
+                comparison,
+                os.path.join(save_dir, 'samples.png'),
+                nrow=8,
+                normalize=True,
+                value_range=(-1, 1)
+            )
+            print(f"\n✅ Saved sample images to {save_dir}/samples.png")
+    
+    # Compute summary statistics
+    return {
+        'psnr': np.mean(all_psnr),
+        'ssim': np.mean(all_ssim),
+        'mse': np.mean(all_mse),
+        'mae': np.mean(all_mae)
+    }
