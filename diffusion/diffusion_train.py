@@ -15,7 +15,7 @@ from config import Config
 from noise_scheduler_config import NoiseConfig
 from data.celeba_dataset import CelebADataset
 from unet_diffusion import UNetDiffusion, NoiseScheduler
-from diffusion_loss import DiffusionLossPerImage, DiffusionLoss
+from diffusion_loss import DiffusionLoss
 from diffusion_trainer import DiffusionTrainer
 from masking.mask_generator import MaskGenerator
 

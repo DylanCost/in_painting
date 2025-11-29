@@ -173,6 +173,16 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
         'mae': np.mean(all_mae)
     }
 
+def load_model(model, config, device):
+    checkpoint_path = os.path.join(config.logging.checkpoint_dir, 'diffusion_final_model.pt')
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+    
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    print(f"✅ Loaded checkpoint from epoch {checkpoint['epoch']}")
+    return model
+
 def evaluate():
     """Evaluate trained diffusion model on test set."""
     
@@ -206,15 +216,8 @@ def evaluate():
         use_attention=config.unet.use_attention,
         use_skip_connections=config.unet.use_skip_connections,
     ).to(device)
-    
-    # Load checkpoint
-    checkpoint_path = os.path.join(config.logging.checkpoint_dir, 'diffusion_final_model.pt')
-    if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
-    
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    print(f"✅ Loaded checkpoint from epoch {checkpoint['epoch']}")
+
+    model = load_model(model, config, device)
     
     model.eval()
     
@@ -245,4 +248,7 @@ def evaluate():
 
 if __name__ == '__main__':
     results = evaluate()
-    
+    print(f"PSNR values: {results['psnr']}")
+    print(f"SSIM values: {results['ssim']}")
+    print(f"MSE values:  {results['mse']}")
+    print(f"MAE values:  {results['mae']}")

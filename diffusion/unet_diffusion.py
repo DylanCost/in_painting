@@ -8,12 +8,6 @@ import torchvision.utils as vutils
 import numpy as np
 import os
 
-# from models.pretrained_encoders import (
-#     PretrainedResNetEncoder,
-#     PretrainedVAEEncoder,
-#     PretrainedStyleGANEncoder
-# )
-
 class UNetDiffusion(nn.Module):
     def __init__(
         self,
