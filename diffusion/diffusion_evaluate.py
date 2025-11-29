@@ -98,6 +98,16 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     
     # Create save directory
     os.makedirs(save_dir, exist_ok=True)
+
+    # Create logs directory and log file
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "diffusion_testing_log.txt")
+    
+    # Create/overwrite log file
+    with open(log_file, 'w') as f:
+        f.write("Testing Log\n")
+        f.write("=" * 60 + "\n\n")
     
     # Initialize metrics calculator
     metrics_calc = InpaintingMetrics(device=device)
@@ -109,8 +119,8 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     all_mae = []
     
     print("\nStarting evaluation...")
-    out_dir = "./runs/eval_debug"
-    os.makedirs(out_dir, exist_ok=True)
+    #out_dir = "./runs/eval_debug"
+    # os.makedirs(out_dir, exist_ok=True)
 
     for batch_idx, batch in enumerate(tqdm(test_loader, desc="Evaluating")):
         if batch_idx > 2:
@@ -146,6 +156,15 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
         all_ssim.append(ssim_val)
         all_mse.append(mse_val)
         all_mae.append(mae_val)
+
+        # Log batch metrics
+        with open(log_file, 'a') as f:
+            f.write(f"Batch {batch_idx + 1}\n")
+            f.write(f"PSNR: {psnr_val:.4f}\n")
+            f.write(f"SSIM: {ssim_val:.4f}\n")
+            f.write(f"MSE: {mse_val:.6f}\n")
+            f.write(f"MAE: {mae_val:.6f}\n")
+            f.write("-" * 60 + "\n\n")
         
         # Save first batch for visualization
         if batch_idx == 0:
@@ -168,12 +187,26 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
             print(f"\n✅ Saved sample images to {save_dir}/samples.png")
     
     # Compute summary statistics
-    return {
+    # Compute summary statistics
+    summary = {
         'psnr': np.mean(all_psnr),
         'ssim': np.mean(all_ssim),
         'mse': np.mean(all_mse),
         'mae': np.mean(all_mae)
     }
+    
+    # Log summary statistics
+    with open(log_file, 'a') as f:
+        f.write("\n" + "=" * 60 + "\n")
+        f.write("SUMMARY STATISTICS\n")
+        f.write("=" * 60 + "\n")
+        f.write(f"Average PSNR: {summary['psnr']:.4f}\n")
+        f.write(f"Average SSIM: {summary['ssim']:.4f}\n")
+        f.write(f"Average MSE: {summary['mse']:.6f}\n")
+        f.write(f"Average MAE: {summary['mae']:.6f}\n")
+        f.write("=" * 60 + "\n")
+    
+    return summary
 
 def load_model(model, config, device):
     checkpoint_path = os.path.join(config.logging.checkpoint_dir, 'diffusion_final_model.pt')
