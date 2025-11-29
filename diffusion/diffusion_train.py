@@ -10,7 +10,6 @@ project_root = os.path.dirname(project_root)               # go one level up →
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-
 from config import Config
 from noise_scheduler_config import NoiseConfig
 from data.celeba_dataset import CelebADataset
@@ -18,9 +17,11 @@ from unet_diffusion import UNetDiffusion, NoiseScheduler
 from diffusion_loss import DiffusionLoss
 from diffusion_trainer import DiffusionTrainer
 from masking.mask_generator import MaskGenerator
+from scripts.set_seed import set_seed
 
 
 def main():
+    set_seed()
     config = Config()
     noise_scheduler = NoiseConfig()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

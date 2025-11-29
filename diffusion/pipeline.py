@@ -17,10 +17,11 @@ from diffusion_loss import DiffusionLoss
 from diffusion_trainer import DiffusionTrainer
 from masking.mask_generator import MaskGenerator
 from diffusion.diffusion_evaluate import load_model, run_evaluation
-
+from scripts.set_seed import set_seed
 
 
 def main():
+    set_seed()
     config = Config()
     noise_scheduler = NoiseConfig()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

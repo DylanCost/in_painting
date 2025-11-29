@@ -15,6 +15,7 @@ from data.celeba_dataset import CelebADataset
 from unet_diffusion import UNetDiffusion, NoiseScheduler
 from masking.mask_generator import MaskGenerator
 from evaluation.metrics import InpaintingMetrics
+from scripts.set_seed import set_seed
 
 
 @torch.no_grad()
@@ -92,6 +93,7 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     """
     Run comprehensive evaluation on test set.
     """
+
     model.eval()
     
     # Create save directory
@@ -185,7 +187,7 @@ def load_model(model, config, device):
 
 def evaluate():
     """Evaluate trained diffusion model on test set."""
-    
+    set_seed()
     # Load config
     config = Config()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
