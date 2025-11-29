@@ -5,7 +5,10 @@ inpainting model with adjustable parameters and real-time visualization.
 """
 
 import sys
+import json
 from pathlib import Path
+from dataclasses import dataclass
+from typing import Optional, List, Dict
 
 # Add project root to Python path to enable absolute imports
 # This is necessary when running the script from within the flowmatching directory
@@ -93,6 +96,90 @@ def overlay_mask(
     result = torch.where(mask.expand_as(image) > 0.5, overlay, image)
 
     return result
+
+
+@dataclass
+class CheckpointInfo:
+    """Information about a discovered checkpoint."""
+    path: Path
+    run_timestamp: str
+    checkpoint_type: str  # "best" or "last"
+    display_name: str
+    metrics: Optional[Dict[str, float]] = None
+
+
+def discover_checkpoints() -> List[CheckpointInfo]:
+    """Discover all available checkpoints from training runs.
+    
+    Scans runs/flowmatching/{timestamp}/checkpoints/ for best.ckpt and last.ckpt
+    files, optionally loading metrics from eval_results.json for display.
+    
+    Returns:
+        List of CheckpointInfo objects, sorted by timestamp (newest first)
+    """
+    checkpoints = []
+    runs_dir = Path("runs/flowmatching")
+    
+    if not runs_dir.exists():
+        return checkpoints
+    
+    # Iterate through run directories (sorted newest first)
+    for run_dir in sorted(runs_dir.iterdir(), reverse=True):
+        if not run_dir.is_dir():
+            continue
+            
+        timestamp = run_dir.name
+        ckpt_dir = run_dir / "checkpoints"
+        
+        if not ckpt_dir.exists():
+            continue
+        
+        # Try to load metrics for display
+        metrics = None
+        eval_results_path = run_dir / "eval_results.json"
+        if eval_results_path.exists():
+            try:
+                with open(eval_results_path) as f:
+                    results = json.load(f)
+                    metrics = results.get("metrics_masked", {})
+            except Exception:
+                pass  # Metrics are optional
+        
+        # Check for best checkpoint
+        best_ckpt = ckpt_dir / "best.ckpt"
+        if best_ckpt.exists():
+            display_name = f"{timestamp}/best"
+            if metrics:
+                psnr = metrics.get("psnr", 0)
+                ssim = metrics.get("ssim", 0)
+                display_name += f" (PSNR: {psnr:.2f} dB, SSIM: {ssim:.4f})"
+            
+            checkpoints.append(CheckpointInfo(
+                path=best_ckpt,
+                run_timestamp=timestamp,
+                checkpoint_type="best",
+                display_name=display_name,
+                metrics=metrics
+            ))
+        
+        # Check for last checkpoint
+        last_ckpt = ckpt_dir / "last.ckpt"
+        if last_ckpt.exists():
+            display_name = f"{timestamp}/last"
+            if metrics:
+                psnr = metrics.get("psnr", 0)
+                ssim = metrics.get("ssim", 0)
+                display_name += f" (PSNR: {psnr:.2f} dB, SSIM: {ssim:.4f})"
+            
+            checkpoints.append(CheckpointInfo(
+                path=last_ckpt,
+                run_timestamp=timestamp,
+                checkpoint_type="last",
+                display_name=display_name,
+                metrics=metrics
+            ))
+    
+    return checkpoints
 
 
 @st.cache_resource
@@ -202,25 +289,45 @@ def main():
 
     # Model checkpoint selection
     st.sidebar.subheader("Model Settings")
-    checkpoint_dir = Path("checkpoints")
-
-    if checkpoint_dir.exists():
-        checkpoints = list(checkpoint_dir.glob("*.pt")) + list(
-            checkpoint_dir.glob("*.pth")
-        )
-        checkpoint_names = ["None (Untrained)"] + [cp.name for cp in checkpoints]
-        selected_checkpoint = st.sidebar.selectbox(
+    
+    # Discover available checkpoints
+    available_checkpoints = discover_checkpoints()
+    
+    if available_checkpoints:
+        # Create display names for dropdown
+        checkpoint_options = ["None (Untrained)"] + [
+            ckpt.display_name for ckpt in available_checkpoints
+        ]
+        
+        selected_name = st.sidebar.selectbox(
             "Model Checkpoint",
-            checkpoint_names,
+            checkpoint_options,
             help="Select a trained checkpoint or use untrained model",
         )
-
-        if selected_checkpoint != "None (Untrained)":
-            checkpoint_path = str(checkpoint_dir / selected_checkpoint)
-        else:
+        
+        # Map selection back to checkpoint path
+        if selected_name == "None (Untrained)":
             checkpoint_path = None
+        else:
+            # Find the selected checkpoint
+            selected_ckpt = next(
+                ckpt for ckpt in available_checkpoints
+                if ckpt.display_name == selected_name
+            )
+            checkpoint_path = str(selected_ckpt.path)
+            
+            # Display additional run info
+            with st.sidebar.expander("📊 Run Details"):
+                st.text(f"Timestamp: {selected_ckpt.run_timestamp}")
+                st.text(f"Type: {selected_ckpt.checkpoint_type}")
+                if selected_ckpt.metrics:
+                    st.text(f"PSNR: {selected_ckpt.metrics.get('psnr', 'N/A'):.2f} dB")
+                    st.text(f"SSIM: {selected_ckpt.metrics.get('ssim', 'N/A'):.4f}")
+                    if 'lpips' in selected_ckpt.metrics:
+                        st.text(f"LPIPS: {selected_ckpt.metrics['lpips']:.4f}")
     else:
-        st.sidebar.info("No checkpoints directory found")
+        st.sidebar.info("ℹ️ No trained checkpoints found in runs/flowmatching/")
+        st.sidebar.caption("Train a model using: `python -m flowmatching.pipeline`")
         checkpoint_path = None
 
     # Load model
