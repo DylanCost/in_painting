@@ -247,7 +247,7 @@ def main():
         "Minimum Mask Size",
         min_value=16,
         max_value=96,
-        value=32,
+        value=16,
         step=8,
         help="Minimum dimension of rectangular mask",
     )

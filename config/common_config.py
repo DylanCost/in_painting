@@ -38,8 +38,8 @@ class MaskConfig:
 
     type: str = "random"  # random, center, irregular
     mask_ratio: float = 0.4
-    min_size: int = 32
-    max_size: int = 128
+    min_size: int = 16
+    max_size: int = 64
     seed: int = 42
     cache_dir: str = "./assets/masks"
 
