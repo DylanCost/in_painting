@@ -118,15 +118,13 @@ class DiffusionTrainer:
         """
         Run comprehensive evaluation on test set.
         """
-        print('find warning')
         self.model.eval()
-        print('find warnings')
         # Create save directory
         os.makedirs(save_dir, exist_ok=True)
-        
+        print('find warning')
         # Initialize metrics calculator
         metrics_calc = InpaintingMetrics(device=self.device)
-        
+        print('find warnings')
         # Collect metrics
         all_psnr = []
         all_ssim = []
@@ -192,13 +190,21 @@ class DiffusionTrainer:
         all_mse = []
         all_mae = []
 
+        # Create logs directory at project root level
+        log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        log_file = os.path.join(log_dir, "diffusion_training_log.txt")
+
+        with open(log_file, 'w') as f:
+            f.write("Training Log\n")
+            f.write("=" * 60 + "\n\n")
+
 
         print("\n🚀 Starting training...")
-        # print(f"EMA Status: {'ENABLED' if self.use_ema else 'DISABLED'}")
         print("-" * 60)
 
         for epoch in range(1, self.num_epochs + 1):
-            if epoch > 5:
+            if epoch > 2:
                 break
             print(f"\nEpoch {epoch}/{self.num_epochs}")
             print("-" * 50)
@@ -209,6 +215,16 @@ class DiffusionTrainer:
             metrics = self.validate()
             curr_psnr = metrics['psnr']
             print(f"Validation PSNR: {curr_psnr:.4f}")
+
+            # Write to log file
+            with open(log_file, 'a') as f:
+                f.write(f"Epoch {epoch}/{self.num_epochs}\n")
+                f.write(f"Train Loss: {train_loss:.4f}\n")
+                f.write(f"Validation PSNR: {curr_psnr:.4f}\n")
+                f.write(f"Validation SSIM: {metrics['ssim']:.4f}\n")
+                f.write(f"Validation MSE: {metrics['mse']:.6f}\n")
+                f.write(f"Validation MAE: {metrics['mae']:.6f}\n")
+                f.write("\n")
 
             self.scheduler.step()
 
@@ -232,6 +248,12 @@ class DiffusionTrainer:
         self.save_checkpoint(epoch, "diffusion_final_model.pt")
         print("💾 Final model saved after all epochs.")
         print(f"\n🏁 Training complete — Best PSNR: {best_psnr:.4f}")
+
+        with open(log_file, 'a') as f:
+            f.write("\n" + "=" * 60 + "\n")
+            f.write(f"Training complete — Best PSNR: {best_psnr:.4f}\n")
+            f.write("=" * 60 + "\n")
+
         return all_psnr, all_ssim, all_mse, all_mae
 
     # -------------------------------------------------------------------------
