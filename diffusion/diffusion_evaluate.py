@@ -111,8 +111,8 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     os.makedirs(out_dir, exist_ok=True)
 
     for batch_idx, batch in enumerate(tqdm(test_loader, desc="Evaluating")):
-        # if batch_idx > 2:
-        #     break
+        if batch_idx > 2:
+            break
         images = batch['image'].to(device)
         filenames = batch['filename']
         
@@ -191,7 +191,7 @@ def evaluate():
     
     test_loader = DataLoader(
         test_dataset,
-        batch_size=config.training.batch_size,
+        batch_size=config.data.batch_size,
         shuffle=False,
         num_workers=config.data.num_workers,
         pin_memory=True
@@ -201,14 +201,10 @@ def evaluate():
     
     # Create model
     model = UNetDiffusion(
-        input_channels=config.model.input_channels,
-        hidden_dims=config.model.hidden_dims,
-        use_attention=config.model.use_attention,
-        use_skip_connections=config.model.use_skip_connections,
-        pretrained_encoder=config.model.pretrained_encoder,
-        encoder_checkpoint=config.model.encoder_checkpoint,
-        freeze_encoder_stages=config.model.freeze_encoder_stages,
-        input_size=config.data.image_size
+        input_channels=config.unet.input_channels,
+        hidden_dims=config.unet.hidden_dims,
+        use_attention=config.unet.use_attention,
+        use_skip_connections=config.unet.use_skip_connections,
     ).to(device)
     
     # Load checkpoint
