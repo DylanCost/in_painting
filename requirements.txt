@@ -11,3 +11,4 @@ pyyaml>=6.0
 matplotlib>=3.7.0
 lpips>=0.1.4
 pytorch-fid>=0.3.0
+torchview>=0.2.0

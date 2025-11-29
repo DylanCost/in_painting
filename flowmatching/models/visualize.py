@@ -4,8 +4,7 @@ This script instantiates the U-Net model, performs a forward pass with dummy inp
 and prints the shape of tensors at each layer/block to help understand the architecture.
 """
 import torch
-from src.models.unet import create_unet
-import torchviz
+from .unet import create_unet
 import torchview
 
 def print_separator(char="=", length=80):
