@@ -204,8 +204,6 @@ class DiffusionTrainer:
         print("-" * 60)
 
         for epoch in range(1, self.num_epochs + 1):
-            if epoch > 2:
-                break
             print(f"\nEpoch {epoch}/{self.num_epochs}")
             print("-" * 50)
 
@@ -236,9 +234,9 @@ class DiffusionTrainer:
             else:
                 epochs_no_improve += 1
 
-            if epochs_no_improve >= self.patience:
-                print(f"\n⏹️ Early stopping after {epoch} epochs (no improvement for {self.patience})")
-                break
+            # if epochs_no_improve >= self.patience:
+            #     print(f"\n⏹️ Early stopping after {epoch} epochs (no improvement for {self.patience})")
+            #     break
 
             all_psnr.append(metrics['psnr'])
             all_ssim.append(metrics['ssim'])
