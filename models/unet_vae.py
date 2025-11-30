@@ -86,7 +86,7 @@ class UNetVAE(nn.Module):
             hidden_dims=list(reversed(hidden_dims)),
             use_attention=use_attention,
             target_size=self.image_size  # Pass the target size
-)
+        )
     
     def encode(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor, List[torch.Tensor]]:
         """Encode input to latent distribution parameters."""
@@ -117,7 +117,7 @@ class UNetVAE(nn.Module):
             -1, 
             self.encoder_output_channels,  # 512
             self.encoder_output_size,      # 8
-            self.encoder_output_size        # 8
+            self.encoder_output_size       # 8
         )
         
         if self.use_skip_connections and skip_connections is not None:
@@ -129,7 +129,7 @@ class UNetVAE(nn.Module):
         # The decoder might only output 128x128, so we need to upsample to 256x256
         if output.shape[2] != self.image_size or output.shape[3] != self.image_size:
             output = F.interpolate(output, size=(self.image_size, self.image_size), 
-                                mode='bilinear', align_corners=False)
+                                   mode='bilinear', align_corners=False)
             
         return torch.tanh(output)
     
@@ -223,14 +223,14 @@ class UNetDecoder(nn.Module):
         self.extra_upsample = nn.Sequential(
             nn.ConvTranspose2d(hidden_dims[-1], hidden_dims[-1], 4, stride=2, padding=1),
             nn.BatchNorm2d(hidden_dims[-1]),
-            F.gelu(inplace=True)
+            nn.GELU()
         )
         
         # Final convolution
         self.final_conv = nn.Sequential(
             nn.Conv2d(hidden_dims[-1], hidden_dims[-1], 3, padding=1),
             nn.BatchNorm2d(hidden_dims[-1]),
-            F.gelu(inplace=True),
+            nn.GELU(),
             nn.Conv2d(hidden_dims[-1], output_channels, 3, padding=1)
         )
     
@@ -256,7 +256,7 @@ class UNetDecoder(nn.Module):
         # Ensure we reach the target size
         if x.shape[2] != self.target_size or x.shape[3] != self.target_size:
             x = F.interpolate(x, size=(self.target_size, self.target_size), 
-                            mode='bilinear', align_corners=False)
+                              mode='bilinear', align_corners=False)
         
         return self.final_conv(x)
 
@@ -270,10 +270,10 @@ class EncoderBlock(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 4, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.GELU(),
             nn.Conv2d(out_channels, out_channels, 3, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.GELU()
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -289,10 +289,10 @@ class DecoderBlock(nn.Module):
         self.conv = nn.Sequential(
             nn.ConvTranspose2d(in_channels, out_channels, 4, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
-            F.gelu(inplace=True),
+            nn.GELU(),
             nn.Conv2d(out_channels, out_channels, 3, padding=1),
             nn.BatchNorm2d(out_channels),
-            F.gelu(inplace=True)
+            nn.GELU()
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
