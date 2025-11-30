@@ -9,7 +9,7 @@ class ModelConfig:
     """Model architecture configuration."""
     name: str = "unet_vae"
     input_channels: int = 3
-    latent_dim: int = 512
+    latent_dim: int = 32
     hidden_dims: List[int] = field(default_factory=lambda: [64, 128, 256, 512, 512])
     use_attention: bool = True
     use_skip_connections: bool = True
