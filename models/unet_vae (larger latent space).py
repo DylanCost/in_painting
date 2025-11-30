@@ -15,7 +15,7 @@ class UNetVAE(nn.Module):
     def __init__(
         self,
         input_channels: int = 3,
-        latent_dim: int = 32,
+        latent_dim: int = 512,
         hidden_dims: List[int] = None,
         image_size: int = 128,
         use_attention: bool = True,
