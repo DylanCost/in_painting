@@ -344,7 +344,7 @@ class Trainer:
             
             # Sample generation
             if self.global_step % self.config.logging.sample_interval == 0:
-                self.generate_samples(batch, outputs)
+                self.generate_samples(batch, outputs, mask)
             
             self.global_step += 1
         
@@ -646,33 +646,38 @@ class Trainer:
             for key, value in processed_metrics.items():
                 self.writer.add_scalar(f"{prefix}/{key}", value, log_step)
     
-    def generate_samples(self, batch: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]):
-        """Generate sample reconstructions for visualization."""
+    def generate_samples(
+        self, 
+        batch: Dict[str, torch.Tensor], 
+        outputs: Dict[str, torch.Tensor],
+        mask: torch.Tensor
+    ):
+        """Generate sample reconstructions for visualization.
+        
+        Args:
+            batch: Dictionary containing 'image' tensor
+            outputs: Dictionary containing 'reconstruction' tensor
+            mask: The actual mask used during training (B, 1, H, W)
+        """
         import torchvision.utils as vutils
         
         # Create grid of images
         n_samples = min(8, batch['image'].shape[0])
 
-        # Prepare masked images for visualization (compute if not provided)
+        # Get original images and move to device
         imgs = batch['image'][:n_samples].to(self.device)
-        try:
-            B, C, H, W = imgs.shape
-            vis_mask = self.train_mask_gen.generate((B, 1, H, W)).to(self.device)
-            vis_masked = imgs * (1.0 - vis_mask)
-        except Exception:
-            vis_masked = imgs  # fallback if shape unexpected
+        
+        # Use the actual mask from training (not a new random one)
+        vis_mask = mask[:n_samples].to(self.device)
+        vis_masked = imgs * (1.0 - vis_mask)
 
         # Get reconstructions and ensure they're on the same device
         recon = outputs['reconstruction'][:n_samples].to(self.device)
 
-        # Denormalize images for visualization
-        def denormalize(x):
-            return x  # Images are already in [-1, 1] range
-
         comparison = torch.cat([
-            denormalize(imgs),
-            denormalize(vis_masked),
-            denormalize(recon)
+            imgs,
+            vis_masked,
+            recon
         ], dim=0)
         
         grid = vutils.make_grid(comparison, nrow=n_samples, normalize=True, value_range=(-1, 1))
