@@ -67,11 +67,12 @@ class UNetVAE(nn.Module):
                 use_attention=use_attention
             )
         
-        # Based on the error message, we know the actual flattened size is 32768
-        # This corresponds to 512 channels * 8 * 8 spatial dimensions
-        self.flattened_size = 32768
+        # For 128x128 images with 5 encoder blocks (each downsamples by 2):
+        # 128 -> 64 -> 32 -> 16 -> 8 -> 4
+        # This gives 512 channels * 4 * 4 spatial dimensions = 8192
+        self.flattened_size = 8192
         self.encoder_output_channels = hidden_dims[-1]  # 512
-        self.encoder_output_size = 8  # 8x8 spatial dimensions
+        self.encoder_output_size = 4  # 4x4 spatial dimensions
         
         # Latent space - use the correct size
         self.fc_mu = nn.Linear(self.flattened_size, latent_dim)
