@@ -55,12 +55,13 @@ def compute_ssim(
         coords = torch.arange(size, dtype=torch.float32) - size // 2
         g = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
         g /= g.sum()
-        return g.view(1, 1, -1)
+        return g
     
     # Create 2D window
     sigma = 1.5
     _1d_window = gaussian_window(window_size, sigma)
-    _2d_window = _1d_window.t() @ _1d_window
+    _2d_window = _1d_window.unsqueeze(1) @ _1d_window.unsqueeze(0)  # Outer product
+    _2d_window = _2d_window.unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, window_size, window_size)
     _2d_window = _2d_window.expand(channel, 1, window_size, window_size).contiguous()
     window = _2d_window.to(pred.device, dtype=pred.dtype)
     
@@ -653,13 +654,16 @@ class Trainer:
         n_samples = min(8, batch['image'].shape[0])
 
         # Prepare masked images for visualization (compute if not provided)
-        imgs = batch['image'][:n_samples]
+        imgs = batch['image'][:n_samples].to(self.device)
         try:
             B, C, H, W = imgs.shape
-            vis_mask = self.train_mask_gen.generate((B, 1, H, W)).to(imgs.device)
+            vis_mask = self.train_mask_gen.generate((B, 1, H, W)).to(self.device)
             vis_masked = imgs * (1.0 - vis_mask)
         except Exception:
             vis_masked = imgs  # fallback if shape unexpected
+
+        # Get reconstructions and ensure they're on the same device
+        recon = outputs['reconstruction'][:n_samples].to(self.device)
 
         # Denormalize images for visualization
         def denormalize(x):
@@ -668,16 +672,13 @@ class Trainer:
         comparison = torch.cat([
             denormalize(imgs),
             denormalize(vis_masked),
-            denormalize(outputs['reconstruction'][:n_samples])
+            denormalize(recon)
         ], dim=0)
         
         grid = vutils.make_grid(comparison, nrow=n_samples, normalize=True, value_range=(-1, 1))
         
         # Compute metrics for these samples
-        sample_metrics = self.compute_batch_metrics(
-            outputs['reconstruction'][:n_samples].to(self.device),
-            imgs.to(self.device)
-        )
+        sample_metrics = self.compute_batch_metrics(recon, imgs)
         
         if self.config.logging.use_wandb:
             wandb.log({
