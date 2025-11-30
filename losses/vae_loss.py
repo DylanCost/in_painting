@@ -26,8 +26,11 @@ class VAELoss(nn.Module):
         self.l2_loss = nn.MSELoss()
         
         # Perceptual loss
-        if use_perceptual:
+        if use_perceptual and perceptual_weight > 0:
             self.perceptual_loss = PerceptualLoss()
+            # Move to CUDA if available
+            if torch.cuda.is_available():
+                self.perceptual_loss = self.perceptual_loss.cuda()
         else:
             self.perceptual_loss = None
     
