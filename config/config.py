@@ -43,7 +43,7 @@ class DataConfig:
     dataset: str = "celeba"
     #data_path: str = "./assets/datasets"
     data_path: str = "/content/in_painting/assets/datasets"
-    image_size: int = 256
+    image_size: int = 128
     num_workers: int = 4
     augmentation: bool = True
 
@@ -53,8 +53,8 @@ class MaskConfig:
     """Masking strategy configuration."""
     type: str = "random"  # random, center, irregular
     mask_ratio: float = 0.4
-    min_size: int = 32
-    max_size: int = 128
+    min_size: int = 16
+    max_size: int = 64
     seed: int = 42
     #cache_dir: str = "./assets/masks"
     cache_dir: str = "/content/in_painting/assets/masks"
