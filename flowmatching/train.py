@@ -93,7 +93,11 @@ def parse_args():
 
     # Model parameters
     parser.add_argument(
-        "--base_channels", type=int, default=64, help="Base number of channels in U-Net"
+        "--hidden_dims",
+        type=int,
+        nargs="+",
+        default=[64, 128, 256, 512],
+        help="Channel dimensions for U-Net levels",
     )
     parser.add_argument(
         "--time_emb_dim", type=int, default=256, help="Time embedding dimension"
@@ -232,7 +236,7 @@ def main():
     model = create_unet(
         in_channels=4,  # RGB + mask
         out_channels=3,  # RGB velocity
-        base_channels=args.base_channels,
+        hidden_dims=args.hidden_dims,
         time_embed_dim=args.time_emb_dim,
     )
 
