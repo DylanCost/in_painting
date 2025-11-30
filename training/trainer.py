@@ -348,9 +348,22 @@ class Trainer:
                 self.writer.add_scalar(f"{prefix}/{key}", value, self.global_step)
     
     def generate_samples(self, batch: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]):
-        """Generate and log sample images."""
-        import torchvision.utils as vutils
+        """Generate sample reconstructions for visualization."""
+        # Get the device from the batch
+        device = batch.device
         
+        # Move all tensors to the same device before concatenation
+        original = batch[:8].to(device)  # First 8 images
+        reconstruction = outputs['reconstruction'][:8].to(device)
+        
+        # If you have masked images, ensure they're on the same device too
+        if hasattr(self, 'last_masked_image'):
+            masked = self.last_masked_image[:8].to(device)
+            comparison = torch.cat([original, masked, reconstruction], dim=0)
+        else:
+            comparison = torch.cat([original, reconstruction], dim=0)
+            import torchvision.utils as vutils
+            
         # Create grid of images
         n_samples = min(8, batch['image'].shape[0])
 
