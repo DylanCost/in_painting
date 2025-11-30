@@ -1,7 +1,7 @@
 """Time embedding module for flow matching models.
 
 This module implements sinusoidal positional encodings for time conditioning
-in the U-Net architecture.
+in the U-Net architecture, adapted from DDPM-style embeddings.
 """
 
 import math
@@ -9,141 +9,118 @@ import torch
 import torch.nn as nn
 
 
-class SinusoidalTimeEmbedding(nn.Module):
-    """Sinusoidal time embedding layer.
-    
-    Converts scalar time values into high-dimensional embeddings using
-    sinusoidal functions at different frequencies, similar to positional
-    encodings in transformers.
+class SinusoidalPositionEmbeddings(nn.Module):
+    """
+    Sinusoidal position embeddings for timesteps.
+    Used to encode timestep information in diffusion models.
+    Based on the positional encoding from "Attention is All You Need".
     
     Args:
-        embedding_dim: Dimension of the output embedding (default: 256)
-        max_period: Maximum period for the sinusoidal functions (default: 10000)
-    
-    Input:
-        t: Time values of shape [B] or [B, 1], values typically in [0, 1]
-    
-    Output:
-        embeddings: Time embeddings of shape [B, embedding_dim]
+        dim: Dimension of the output embedding
+        scale: Scaling factor for time inputs (default: 1000.0).
+               Since flow matching uses t in [0, 1], we scale it up to match
+               the typical range of DDPM timesteps (0-1000).
     """
-    
-    def __init__(self, embedding_dim: int = 256, max_period: int = 10000):
+    def __init__(self, dim: int, scale: float = 1000.0):
         super().__init__()
-        self.embedding_dim = embedding_dim
-        self.max_period = max_period
-        
-    def forward(self, t: torch.Tensor) -> torch.Tensor:
-        """Generate sinusoidal time embeddings.
-        
-        Args:
-            t: Time values of shape [B] or [B, 1]
-            
-        Returns:
-            Time embeddings of shape [B, embedding_dim]
+        self.dim = dim
+        self.scale = scale
+    
+    def forward(self, time: torch.Tensor) -> torch.Tensor:
         """
-        # Ensure t is shape [B]
-        if t.dim() == 2:
-            t = t.squeeze(-1)
+        Args:
+            time: Timesteps, shape [B] or [B, 1] - values typically in [0, 1]
         
-        half_dim = self.embedding_dim // 2
+        Returns:
+            embeddings: Sinusoidal embeddings, shape [B, dim]
+        """
+        device = time.device
         
-        # Compute frequency scaling factors
-        # emb = log(max_period) / (half_dim - 1)
-        emb = math.log(self.max_period) / (half_dim - 1)
-        emb = torch.exp(torch.arange(half_dim, device=t.device, dtype=torch.float32) * -emb)
+        # Ensure time is shape [B]
+        if time.dim() == 2:
+            time = time.squeeze(-1)
+            
+        # Scale time to match DDPM range
+        time = time * self.scale
         
-        # Compute sinusoidal embeddings
-        # emb shape: [half_dim]
-        # t[:, None] shape: [B, 1]
-        # emb[None, :] shape: [1, half_dim]
-        # Result shape: [B, half_dim]
-        emb = t[:, None] * emb[None, :]
+        half_dim = self.dim // 2
+        
+        # Create frequency spectrum
+        embeddings = math.log(10000) / (half_dim - 1)
+        embeddings = torch.exp(torch.arange(half_dim, device=device) * -embeddings)
+        
+        # Apply to timesteps
+        embeddings = time[:, None] * embeddings[None, :]
         
         # Concatenate sin and cos
-        emb = torch.cat([torch.sin(emb), torch.cos(emb)], dim=-1)
+        embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
         
-        # Handle odd embedding dimensions
-        if self.embedding_dim % 2 == 1:
-            emb = torch.nn.functional.pad(emb, (0, 1), mode='constant', value=0)
-        
-        return emb
+        # Handle odd dimensions
+        if self.dim % 2 == 1:
+            embeddings = torch.nn.functional.pad(embeddings, (0, 1))
+            
+        return embeddings
 
 
 class TimeEmbeddingMLP(nn.Module):
-    """MLP for processing time embeddings.
-    
-    Projects sinusoidal time embeddings to the desired dimension and
-    applies non-linear transformations.
+    """
+    MLP for processing time embeddings.
+    Matches the structure used in UNetDiffusion (Linear -> GELU -> Linear -> GELU).
     
     Args:
-        time_embed_dim: Input dimension from sinusoidal embedding (default: 256)
-        hidden_dim: Hidden dimension for MLP (default: 1024)
-        output_dim: Output dimension (default: 256)
-    
-    Input:
-        t: Time embeddings of shape [B, time_embed_dim]
-    
-    Output:
-        embeddings: Processed time embeddings of shape [B, output_dim]
+        embedding_dim: Input dimension from sinusoidal embedding
+        hidden_dim: Hidden dimension for MLP
+        output_dim: Output dimension
     """
-    
-    def __init__(
-        self,
-        time_embed_dim: int = 256,
-        hidden_dim: int = 1024,
-        output_dim: int = 256
-    ):
-        super().__init__()
-        
-        self.mlp = nn.Sequential(
-            nn.Linear(time_embed_dim, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, output_dim),
-        )
-    
-    def forward(self, t: torch.Tensor) -> torch.Tensor:
-        """Process time embeddings through MLP.
-        
-        Args:
-            t: Time embeddings of shape [B, time_embed_dim]
-            
-        Returns:
-            Processed embeddings of shape [B, output_dim]
-        """
-        return self.mlp(t)
-
-
-class TimestepEmbedding(nn.Module):
-    """Complete timestep embedding module.
-    
-    Combines sinusoidal encoding with MLP processing for time conditioning.
-    
-    Args:
-        embedding_dim: Dimension of sinusoidal embedding (default: 256)
-        hidden_dim: Hidden dimension for MLP (default: 1024)
-        output_dim: Final output dimension (default: 256)
-    
-    Input:
-        t: Time values of shape [B] or [B, 1], values typically in [0, 1]
-    
-    Output:
-        embeddings: Processed time embeddings of shape [B, output_dim]
-    """
-    
     def __init__(
         self,
         embedding_dim: int = 256,
         hidden_dim: int = 1024,
-        output_dim: int = 256
+        output_dim: int = 1024
     ):
         super().__init__()
         
-        self.sinusoidal = SinusoidalTimeEmbedding(embedding_dim)
+        self.mlp = nn.Sequential(
+            nn.Linear(embedding_dim, hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, output_dim),
+            nn.GELU(),
+        )
+    
+    def forward(self, t_emb: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            t_emb: Time embeddings of shape [B, embedding_dim]
+            
+        Returns:
+            Processed embeddings of shape [B, output_dim]
+        """
+        return self.mlp(t_emb)
+
+
+class TimestepEmbedding(nn.Module):
+    """
+    Complete timestep embedding module.
+    Combines sinusoidal encoding with MLP processing.
+    
+    Args:
+        embedding_dim: Dimension of sinusoidal embedding (default: 256)
+        hidden_dim: Hidden dimension for MLP (default: 1024)
+        output_dim: Final output dimension (default: 1024)
+    """
+    def __init__(
+        self,
+        embedding_dim: int = 256,
+        hidden_dim: int = 1024,
+        output_dim: int = 1024
+    ):
+        super().__init__()
+        
+        self.sinusoidal = SinusoidalPositionEmbeddings(embedding_dim)
         self.mlp = TimeEmbeddingMLP(embedding_dim, hidden_dim, output_dim)
     
     def forward(self, t: torch.Tensor) -> torch.Tensor:
-        """Generate and process time embeddings.
-        
+        """
         Args:
             t: Time values of shape [B] or [B, 1]
             

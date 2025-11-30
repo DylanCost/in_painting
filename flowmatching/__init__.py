@@ -18,7 +18,7 @@ Example usage:
     >>> dataset = CelebAInpainting(root='./data', split='train')
     >>>
     >>> # Create model
-    >>> model = create_unet(in_channels=4, out_channels=3)
+    >>> model = create_unet(in_channels=4, out_channels=3, hidden_dims=[64, 128, 256, 512])
     >>>
     >>> # Train
     >>> trainer = Trainer(model, train_loader, val_loader, optimizer)

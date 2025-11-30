@@ -5,20 +5,19 @@ for flow matching-based image inpainting.
 """
 
 from .unet import UNet, create_unet
-from .blocks import DoubleConv, Down, Up
-from .embeddings import SinusoidalTimeEmbedding, TimeEmbeddingMLP, TimestepEmbedding
+from .blocks import EncoderBlock, DecoderBlock, SelfAttention
+from .embeddings import SinusoidalPositionEmbeddings, TimeEmbeddingMLP, TimestepEmbedding
 
 __all__ = [
     # Main model
     "UNet",
     "create_unet",
     # Building blocks
-    "DoubleConv",
-    "Down",
-    "Up",
-    "AttentionBlock",
+    "EncoderBlock",
+    "DecoderBlock",
+    "SelfAttention",
     # Embeddings
-    "SinusoidalTimeEmbedding",
+    "SinusoidalPositionEmbeddings",
     "TimeEmbeddingMLP",
     "TimestepEmbedding",
 ]
