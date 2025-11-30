@@ -6,7 +6,6 @@ from torch.optim import Adam, lr_scheduler
 import wandb
 from tqdm import tqdm
 import os
-import csv
 import math
 from typing import Dict, Optional
 from torch.utils.tensorboard import SummaryWriter
@@ -204,10 +203,6 @@ class Trainer:
         self.checkpoint_dir = config.logging.checkpoint_dir
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         
-        # CSV metrics logging
-        self.metrics_csv_path = os.path.join(self.checkpoint_dir, 'metrics.csv')
-        self.csv_initialized = False
-        
         self.current_epoch = 0
         self.global_step = 0
         self.best_val_loss = float('inf')
@@ -335,11 +330,11 @@ class Trainer:
                 'ssim': batch_metrics['ssim']
             })
             
-            # Logging at batch level (uses global_step)
+            # Logging
             if self.global_step % self.config.logging.log_interval == 0:
                 # Merge losses and metrics for logging
                 all_metrics = {**losses, **batch_metrics}
-                self.log_metrics(all_metrics, 'train_batch', step=self.global_step)
+                self.log_metrics(all_metrics, 'train')
             
             # Sample generation
             if self.global_step % self.config.logging.sample_interval == 0:
@@ -451,62 +446,6 @@ class Trainer:
         
         return test_losses
     
-    def save_metrics_to_csv(
-        self,
-        epoch: int,
-        train_metrics: Dict[str, float],
-        val_metrics: Dict[str, float],
-        test_metrics: Optional[Dict[str, float]] = None,
-        learning_rate: float = None
-    ):
-        """Save epoch metrics to CSV file.
-        
-        Args:
-            epoch: Current epoch number
-            train_metrics: Dictionary of training metrics
-            val_metrics: Dictionary of validation metrics
-            test_metrics: Optional dictionary of test metrics
-            learning_rate: Current learning rate
-        """
-        # Build row data
-        row_data = {'epoch': epoch}
-        
-        # Add learning rate
-        if learning_rate is not None:
-            row_data['learning_rate'] = learning_rate
-        
-        # Add train metrics with prefix
-        for key, value in train_metrics.items():
-            if torch.is_tensor(value):
-                value = value.item()
-            row_data[f'train_{key}'] = value
-        
-        # Add val metrics with prefix
-        for key, value in val_metrics.items():
-            if torch.is_tensor(value):
-                value = value.item()
-            row_data[f'val_{key}'] = value
-        
-        # Add test metrics with prefix (if provided)
-        if test_metrics is not None:
-            for key, value in test_metrics.items():
-                if torch.is_tensor(value):
-                    value = value.item()
-                row_data[f'test_{key}'] = value
-        
-        # Write to CSV
-        file_exists = os.path.exists(self.metrics_csv_path)
-        
-        with open(self.metrics_csv_path, 'a', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=row_data.keys())
-            
-            # Write header only if file is new or empty
-            if not file_exists or not self.csv_initialized:
-                writer.writeheader()
-                self.csv_initialized = True
-            
-            writer.writerow(row_data)
-    
     def train(self):
         """Main training loop with periodic test evaluation and quality metrics."""
         for epoch in range(self.config.training.epochs):
@@ -518,33 +457,15 @@ class Trainer:
             # Validate
             val_losses = self.validate()
             
-            # Log epoch-level metrics (indexed by epoch number)
-            self.log_metrics(train_losses, 'train_epoch', step=epoch)
-            self.log_metrics(val_losses, 'val_epoch', step=epoch)
-            
             # Test every N epochs
-            test_losses = None
             if epoch % 10 == 0 and self.test_loader is not None:
                 test_losses = self.test_model()
                 print(f"Test Loss: {test_losses['total']:.4f} | "
                       f"PSNR: {test_losses['psnr']:.2f} | SSIM: {test_losses['ssim']:.4f}")
-                self.log_metrics(test_losses, 'test_epoch', step=epoch)
+                self.log_metrics(test_losses, 'test_epoch')
             
             # Learning rate scheduling
             self.scheduler.step()
-            
-            # Log learning rate
-            current_lr = self.scheduler.get_last_lr()[0]
-            self.log_metrics({'learning_rate': current_lr}, 'train_epoch', step=epoch)
-            
-            # Save metrics to CSV
-            self.save_metrics_to_csv(
-                epoch=epoch,
-                train_metrics=train_losses,
-                val_metrics=val_losses,
-                test_metrics=test_losses,
-                learning_rate=current_lr
-            )
             
             # Logging
             print(f"\nEpoch {epoch}/{self.config.training.epochs}")
@@ -554,6 +475,9 @@ class Trainer:
             print(f"Val Loss: {val_losses['total']:.4f} | "
                   f"MSE: {val_losses['mse']:.4f} | MAE: {val_losses['mae']:.4f} | "
                   f"PSNR: {val_losses['psnr']:.2f} | SSIM: {val_losses['ssim']:.4f}")
+            
+            self.log_metrics(train_losses, 'train_epoch')
+            self.log_metrics(val_losses, 'val_epoch')
             
             # Save checkpoint
             if epoch % self.config.logging.save_interval == 0:
@@ -619,17 +543,8 @@ class Trainer:
         print(f"Loaded checkpoint from epoch {self.current_epoch}")
         return checkpoint
     
-    def log_metrics(self, metrics: Dict[str, float], prefix: str, step: int = None):
-        """Log metrics to wandb and tensorboard.
-        
-        Args:
-            metrics: Dictionary of metric names and values
-            prefix: Prefix for metric names (e.g., 'train_epoch', 'val_epoch')
-            step: Step number for logging. If None, uses global_step.
-        """
-        # Use provided step or default to global_step
-        log_step = step if step is not None else self.global_step
-        
+    def log_metrics(self, metrics: Dict[str, float], prefix: str):
+        """Log metrics to wandb and tensorboard."""
         # Handle both tensor and float values
         processed_metrics = {}
         for key, value in metrics.items():
@@ -639,11 +554,11 @@ class Trainer:
                 processed_metrics[key] = value
         
         if self.config.logging.use_wandb:
-            wandb.log({f"{prefix}/{k}": v for k, v in processed_metrics.items()}, step=log_step)
+            wandb.log({f"{prefix}/{k}": v for k, v in processed_metrics.items()}, step=self.global_step)
         
         if self.writer is not None:
             for key, value in processed_metrics.items():
-                self.writer.add_scalar(f"{prefix}/{key}", value, log_step)
+                self.writer.add_scalar(f"{prefix}/{key}", value, self.global_step)
     
     def generate_samples(self, batch: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]):
         """Generate sample reconstructions for visualization."""

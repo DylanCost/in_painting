@@ -223,14 +223,14 @@ class UNetDecoder(nn.Module):
         self.extra_upsample = nn.Sequential(
             nn.ConvTranspose2d(hidden_dims[-1], hidden_dims[-1], 4, stride=2, padding=1),
             nn.BatchNorm2d(hidden_dims[-1]),
-            nn.ReLU(inplace=True)
+            F.gelu(inplace=True)
         )
         
         # Final convolution
         self.final_conv = nn.Sequential(
             nn.Conv2d(hidden_dims[-1], hidden_dims[-1], 3, padding=1),
             nn.BatchNorm2d(hidden_dims[-1]),
-            nn.ReLU(inplace=True),
+            F.gelu(inplace=True),
             nn.Conv2d(hidden_dims[-1], output_channels, 3, padding=1)
         )
     
@@ -289,10 +289,10 @@ class DecoderBlock(nn.Module):
         self.conv = nn.Sequential(
             nn.ConvTranspose2d(in_channels, out_channels, 4, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            F.gelu(inplace=True),
             nn.Conv2d(out_channels, out_channels, 3, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
+            F.gelu(inplace=True)
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:

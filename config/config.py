@@ -22,7 +22,7 @@ class ModelConfig:
 @dataclass
 class TrainingConfig:
     """Training hyperparameters configuration."""
-    batch_size: int = 32
+    batch_size: int = 64
     learning_rate: float = 0.0002
     beta1: float = 0.5
     beta2: float = 0.999
@@ -41,7 +41,8 @@ class TrainingConfig:
 class DataConfig:
     """Dataset configuration."""
     dataset: str = "celeba"
-    data_path: str = "./assets/datasets"
+    #data_path: str = "./assets/datasets"
+    data_path: str = "/content/in_painting/assets/datasets"
     image_size: int = 256
     num_workers: int = 4
     augmentation: bool = True
@@ -55,7 +56,8 @@ class MaskConfig:
     min_size: int = 32
     max_size: int = 128
     seed: int = 42
-    cache_dir: str = "./assets/masks"
+    #cache_dir: str = "./assets/masks"
+    cache_dir: str = "/content/in_painting/assets/masks"
 
 
 @dataclass
@@ -66,8 +68,10 @@ class LoggingConfig:
     log_interval: int = 100
     save_interval: int = 5
     sample_interval: int = 500
-    checkpoint_dir: str = "./weights"
-    log_dir: str = "./logs"
+    #checkpoint_dir: str = "./weights"
+    checkpoint_dir: str = "/content/drive/MyDrive/vae_weights"
+    #log_dir: str = "./logs"
+    log_dir: str = "/content/drive/MyDrive/vae_logs"
 
 
 @dataclass
