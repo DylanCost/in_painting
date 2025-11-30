@@ -97,16 +97,43 @@ def main():
 
     # Start training
     print("Starting training...")
-    all_psnr, all_ssim, all_mse, all_mae = trainer.train()
+    all_psnr, all_ssim, all_mse, all_mae, dataframe = trainer.train()
     print("Training completed!")
     print("\n" + "="*60)
     print("METRICS PER BATCH")
     print("="*60)
-    print(f"PSNR values: {all_psnr}")
-    print(f"SSIM values: {all_ssim}")
-    print(f"MSE values:  {all_mse}")
-    print(f"MAE values:  {all_mae}")
+    print(f"PSNR values: {all_psnr:.2f}")
+    print(f"SSIM values: {all_ssim:.2f}")
+    print(f"MSE values:  {all_mse:.2f}")
+    print(f"MAE values:  {all_mae:.2f}")
     print("="*60)
+
+
+
+    # Export to logs directory (matching your training setup)
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    csv_path = os.path.join(log_dir, "diffusion_data.csv")
+    dataframe.to_csv(csv_path, index=False)
+    print(f"DataFrame saved to {csv_path}")
+
+    # Find maximum values
+    max_psnr = max(all_psnr)
+    max_ssim = max(all_ssim)
+    min_mse = min(all_mse)   # Note: Lower MSE is better
+    min_mae = min(all_mae)   # Note: Lower MAE is better
+
+    # Write to text file
+    txt_path = os.path.join(log_dir, "best_diffusion_metrics.txt")
+    with open(txt_path, 'w') as f:
+        f.write("Best Validation Metrics\n")
+        f.write("=" * 40 + "\n\n")
+        f.write(f"Highest PSNR: {max_psnr:.4f}\n")
+        f.write(f"Highest SSIM: {max_ssim:.4f}\n")
+        f.write(f"Lowest MSE:   {min_mse:.6f}\n")
+        f.write(f"Lowest MAE:   {min_mae:.6f}\n")
+
+    print(f"✅ Best metrics saved to {txt_path}")
 
 if __name__ == '__main__':
     main()

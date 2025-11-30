@@ -3,6 +3,7 @@ import torch
 import copy
 import torchvision.utils as vutils
 import numpy as np
+import pandas as pd
 
 from config import Config
 from noise_scheduler_config import NoiseConfig
@@ -190,6 +191,14 @@ class DiffusionTrainer:
         all_mse = []
         all_mae = []
 
+        # Create DataFrame to store metrics
+        metrics_data = {
+            'epoch': [],
+            'psnr': [],
+            'ssim': [],
+            'mae': []
+        }
+        
         # Create logs directory at project root level
         log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
         os.makedirs(log_dir, exist_ok=True)
@@ -213,6 +222,12 @@ class DiffusionTrainer:
             metrics = self.validate()
             curr_psnr = metrics['psnr']
             print(f"Validation PSNR: {curr_psnr:.4f}")
+
+            # Add metrics to DataFrame data
+            metrics_data['epoch'].append(epoch)
+            metrics_data['psnr'].append(metrics['psnr'])
+            metrics_data['ssim'].append(metrics['ssim'])
+            metrics_data['mae'].append(metrics['mae'])
 
             # Write to log file
             with open(log_file, 'a') as f:
@@ -242,6 +257,8 @@ class DiffusionTrainer:
             all_ssim.append(metrics['ssim'])
             all_mse.append(metrics['mse'])
             all_mae.append(metrics['mae'])
+        
+        metrics_df = pd.DataFrame(metrics_data)
 
         self.save_checkpoint(epoch, "diffusion_final_model.pt")
         print("💾 Final model saved after all epochs.")
@@ -252,7 +269,7 @@ class DiffusionTrainer:
             f.write(f"Training complete — Best PSNR: {best_psnr:.4f}\n")
             f.write("=" * 60 + "\n")
 
-        return all_psnr, all_ssim, all_mse, all_mae
+        return all_psnr, all_ssim, all_mse, all_mae, metrics_df
 
     # -------------------------------------------------------------------------
     # Checkpointing
