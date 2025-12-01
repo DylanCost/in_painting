@@ -198,7 +198,7 @@ def load_model(checkpoint_path: str = None, device: str = "cpu"):
         image_size=128,
         in_channels=4,  # 3 (RGB) + 1 (mask)
         out_channels=3,  # RGB
-        base_channels=64,
+        hidden_dims=[64, 128, 256, 512],
         time_embed_dim=256,
     )
 

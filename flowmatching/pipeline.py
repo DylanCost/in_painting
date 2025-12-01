@@ -249,7 +249,7 @@ def train_model(
         image_size=config.common.data.image_size,
         in_channels=4,  # RGB + mask
         out_channels=3,  # RGB velocity
-        base_channels=config.common.unet.hidden_dims[0],
+        hidden_dims=config.common.unet.hidden_dims,
         time_embed_dim=256,  # Flow matching specific parameter
     )
 
@@ -442,7 +442,7 @@ def load_model_from_checkpoint(
         image_size=config.common.data.image_size,
         in_channels=4,
         out_channels=3,
-        base_channels=config.common.unet.hidden_dims[0],
+        hidden_dims=config.common.unet.hidden_dims,
         time_embed_dim=256,  # Flow matching specific parameter
     )
 
