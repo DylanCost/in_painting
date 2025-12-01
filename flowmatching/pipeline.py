@@ -58,9 +58,6 @@ class FlowMatchingConfig:
     min_lr: float = 1e-6
     subsample_fraction: float = 1.0  # Fraction of training data to use (for debugging)
 
-    # Validation parameters
-    val_timesteps: List[float] = field(default_factory=lambda: [0.25, 0.5, 0.75])
-
     # Sampling parameters
     num_sampling_steps: int = 100
     num_eval_samples: int = 1000
@@ -282,7 +279,6 @@ def train_model(
         checkpoint_dir=str(run_dir / "checkpoints"),
         log_dir=str(run_dir / "logs"),
         save_every=config.common.logging.save_interval,
-        val_timesteps=config.flowmatching.val_timesteps,
         gradient_clip=1.0,
         warmup_steps=config.flowmatching.warmup_steps,
     )

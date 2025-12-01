@@ -6,6 +6,7 @@ and prints the shape of tensors at each layer/block to help understand the archi
 import torch
 from .unet import create_unet
 import torchview
+from config.common_config import Config
 
 def print_separator(char="=", length=80):
     """Print a separator line."""
@@ -22,15 +23,18 @@ def visualize_model_architecture():
     
     print_section("U-Net Model Architecture Visualization")
     
-    # Model configuration
+    # Load configuration matching pipeline.py
+    config = Config()
+    
+    # Model configuration (matching pipeline.py lines 248-254)
     batch_size = 2
     in_channels = 4  # RGB + mask
     out_channels = 3  # RGB velocity
-    image_size = 128
-    time_embed_dim = 256
-    hidden_dims = [64, 128, 256, 512]
+    image_size = config.data.image_size  # Default: 128
+    time_embed_dim = 256  # Flow matching specific parameter
+    hidden_dims = config.unet.hidden_dims  # Default: [64, 128, 256, 512, 512]
     
-    print(f"\nConfiguration:")
+    print(f"\nConfiguration (matching pipeline.py):")
     print(f"  Batch size: {batch_size}")
     print(f"  Input channels: {in_channels} (RGB + mask)")
     print(f"  Output channels: {out_channels} (RGB velocity)")
@@ -139,13 +143,7 @@ def visualize_model_architecture():
         print(f"\n✓ Output shape verified: {list(output_full.shape)}")
         
         # Create a graphviz representation of the model
-        model = create_unet(
-            image_size=image_size,
-            in_channels=in_channels,
-            out_channels=out_channels,
-            hidden_dims=hidden_dims,
-            time_embed_dim=time_embed_dim
-        )
+        # (reusing the same model instance already created above)
         torchview.draw_graph(model, save_graph=True, input_data=(x, t), expand_nested=True, filename="model_architecture")
     
     # Architecture summary

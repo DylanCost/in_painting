@@ -71,7 +71,6 @@ class Trainer:
         checkpoint_dir: str = "./checkpoints",
         log_dir: str = "./logs",
         save_every: int = 5,
-        val_timesteps: List[float] = None,
         val_sampler: str = "heun",
         val_num_steps: int = 50,
         gradient_clip: Optional[float] = 1.0,
@@ -105,7 +104,6 @@ class Trainer:
         )
         self.save_every = save_every
         # Keep val_timesteps for backward compatibility, but it's no longer used
-        self.val_timesteps = val_timesteps or [0.25, 0.5, 0.75]
         self.val_sampler = val_sampler
         self.val_num_steps = val_num_steps
         self.gradient_clip = gradient_clip
