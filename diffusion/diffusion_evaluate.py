@@ -89,18 +89,19 @@ def sample_ddpm(model, scheduler, x_t, mask, num_timesteps=None):
     return x_t
 
 
-def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, save_dir='results/diffusion'):
+def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, save_dir=None):
     """
     Run comprehensive evaluation on test set.
     """
 
     model.eval()
     
-    # Create save directory
+    # Create save directory: ./results in CURRENT directory
+    save_dir = os.path.join(os.path.dirname(__file__), "results")
     os.makedirs(save_dir, exist_ok=True)
 
     # Create logs directory and log file
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+    log_dir = os.path.join(os.path.dirname(__file__), "logs")
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "diffusion_testing_log.txt")
     
@@ -145,7 +146,7 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
         inpainted = sample_ddpm(model, noise_scheduler, noisy_images, masks, num_timesteps=1000)
         
         # Compute all metrics on full images
-        psnr_val = metrics_calc.psnr(inpainted, images)
+        psnr_val = metrics_calc.psnr(inpainted, images, masks)
         ssim_val = metrics_calc.ssim(inpainted, images)
         
         # Compute MSE and MAE
@@ -205,6 +206,26 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
         f.write(f"Average MSE: {summary['mse']:.6f}\n")
         f.write(f"Average MAE: {summary['mae']:.6f}\n")
         f.write("=" * 60 + "\n")
+    
+    # Compute best metrics
+    best_psnr = max(all_psnr) if all_psnr else float('nan')
+    best_ssim = max(all_ssim) if all_ssim else float('nan')
+    best_mse  = min(all_mse)  if all_mse  else float('nan')
+    best_mae  = min(all_mae)  if all_mae  else float('nan')
+
+    # Save best metrics
+    best_file = os.path.join(log_dir, "best_evaluation_metrics.txt")
+    with open(best_file, 'w') as f:
+        f.write("BEST EVALUATION METRICS\n")
+        f.write("=" * 60 + "\n")
+        f.write(f"Best PSNR: {best_psnr:.4f}\n")
+        f.write(f"Best SSIM: {best_ssim:.4f}\n")
+        f.write(f"Lowest MSE: {best_mse:.6f}\n")
+        f.write(f"Lowest MAE: {best_mae:.6f}\n")
+        f.write("=" * 60 + "\n")
+
+    print(f"\n🏆 Best evaluation metrics saved to {best_file}")
+
     
     return summary
 
