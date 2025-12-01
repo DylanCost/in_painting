@@ -25,7 +25,7 @@ class InpaintingMetrics:
 
         me = ((pred-target) ** 2) * mask
         total_mask_pixels = mask.sum() * pred.shape[1]
-        mse = me / total_mask_pixels
+        mse = me.sum() / total_mask_pixels
     
         maximum = 2
         psnr = 10 * torch.log10(maximum**2 / mse).item()

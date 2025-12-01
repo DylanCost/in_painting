@@ -158,7 +158,7 @@ class DiffusionTrainer:
             inpainted = sample_ddpm(self.model, self.noise_scheduler, noisy_images, masks, num_timesteps=1000)
             
             # Compute all metrics on full images
-            psnr_val = metrics_calc.psnr(inpainted, images)
+            psnr_val = metrics_calc.psnr(inpainted, images, masks)
             ssim_val = metrics_calc.ssim(inpainted, images)
             
             # Compute MSE and MAE
