@@ -124,8 +124,8 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     # os.makedirs(out_dir, exist_ok=True)
 
     for batch_idx, batch in enumerate(tqdm(test_loader, desc="Evaluating")):
-        if batch_idx > 2:
-            break
+        # if batch_idx > 2:
+        #     break
         images = batch['image'].to(device)
         filenames = batch['filename']
         
@@ -136,10 +136,6 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
             filenames=filenames,
             shape=(1, H, W)
         ).to(device)
-
-        # Add this debug:
-        print(f"DEBUG: mask shape={masks.shape}, mask sum={masks.sum(dim=(2,3))[:5]}, expected max area={(32*32)}")
-        print(f"DEBUG: mask unique values={torch.unique(masks[:1])}")
         
         # Add full noise to masked regions (start from complete noise)
         t = torch.full((B,), noise_scheduler.num_timesteps - 1, device=device)
@@ -234,7 +230,10 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     return summary
 
 def load_model(model, config, device):
-    checkpoint_path = os.path.join(config.logging.checkpoint_dir, 'diffusion_final_model.pt')
+    # Look in current directory's weights folder
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    checkpoint_path = os.path.join(current_dir, 'weights', 'diffusion_final_model.pt')
+    
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
     
@@ -249,7 +248,7 @@ def evaluate():
     # Load config
     config = Config()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
+    # print(f"Using device: {device}")
     
     # Create test dataset
     test_dataset = CelebADataset(
@@ -267,7 +266,7 @@ def evaluate():
         pin_memory=True
     )
     
-    print(f"Test dataset size: {len(test_dataset)}")
+    # print(f"Test dataset size: {len(test_dataset)}")
     
     # Create model
     model = UNetDiffusion(
@@ -292,7 +291,6 @@ def evaluate():
     
     # Create deterministic mask generator
     mask_generator = MaskGenerator.for_eval(config.mask)
-    print(f"DEBUG: mask_type={mask_generator.mask_type}, min_size={mask_generator.min_size}, max_size={mask_generator.max_size}")
     
     # Run evaluation
     results = run_evaluation(

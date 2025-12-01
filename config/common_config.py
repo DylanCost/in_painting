@@ -32,7 +32,7 @@ class DataConfig:
     augmentation: bool = True
     batch_size: int = 64
     learning_rate: float = 0.0002
-    epochs: int = 1
+    epochs: int = 100
 
 
 @dataclass

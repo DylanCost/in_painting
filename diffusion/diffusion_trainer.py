@@ -115,14 +115,16 @@ class DiffusionTrainer:
     # # Validation
     # # -------------------------------------------------------------------------
     @torch.no_grad()
-    def validate(self, save_dir='results/diffusion'):
+    def validate(self, epoch):
         """
         Run comprehensive evaluation on test set.
         """
         self.model.eval()
-        # Create save directory
-        os.makedirs(save_dir, exist_ok=True)
-        # Initialize metrics calculator
+
+        # Use current directory's results folder
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        save_dir = os.path.join(current_dir, 'results')
+        
         metrics_calc = InpaintingMetrics(device=self.device)
         # Collect metrics
         all_psnr = []
@@ -131,7 +133,7 @@ class DiffusionTrainer:
         all_mae = []
 
         for batch_idx, batch in enumerate(self.val_loader):
-            if batch_idx > 5:
+            if batch_idx > 10:
                 break
             images = batch['image'].to(self.device)
             filenames = batch['filename']
@@ -164,6 +166,25 @@ class DiffusionTrainer:
             all_ssim.append(ssim_val)
             all_mse.append(mse_val)
             all_mae.append(mae_val)
+
+            # Save first batch for visualization every 20 epochs
+            if batch_idx == 0 and (epoch % 20 == 0 or epoch == 1):
+                masked_input = images * (1 - masks)  # Zero out masked region
+                
+                comparison = torch.cat([
+                    images[:8],           # Row 1: Original
+                    masked_input[:8],     # Row 2: Input with black mask
+                    inpainted[:8]         # Row 3: Inpainted result
+                ], dim=0)
+                
+                vutils.save_image(
+                    comparison,
+                    os.path.join(save_dir, f'samples_epoch_{epoch}.png'),
+                    nrow=8,
+                    normalize=True,
+                    value_range=(-1, 1)
+                )
+                print(f"\n✅ Saved sample images to {save_dir}/samples_epoch_{epoch}.png")
         
         # Compute summary statistics
         return {
@@ -215,7 +236,7 @@ class DiffusionTrainer:
             train_loss = self.train_epoch(epoch)
             print(f"Train Loss: {train_loss:.4f}")
 
-            metrics = self.validate()
+            metrics = self.validate(epoch)
             curr_psnr = metrics['psnr']
             print(f"Validation PSNR: {curr_psnr:.4f}")
 
@@ -272,18 +293,17 @@ class DiffusionTrainer:
     # -------------------------------------------------------------------------
     def save_checkpoint(self, epoch, filename):
         """Save model and EMA state (if available)."""
-        checkpoint_dir = self.config.logging.checkpoint_dir
+        # Use current directory instead of config path
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        checkpoint_dir = os.path.join(current_dir, "weights")
         os.makedirs(checkpoint_dir, exist_ok=True)
-
+        
         checkpoint = {
             "epoch": epoch,
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "scheduler_state_dict": self.scheduler.state_dict(),
         }
-
-        if self.use_ema and self.ema_model is not None:
-            checkpoint["ema_state_dict"] = self.ema_model.state_dict()
 
         path = os.path.join(checkpoint_dir, filename)
         torch.save(checkpoint, path)
