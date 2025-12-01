@@ -108,14 +108,14 @@ def main():
     print(f"MAE values:  {all_mae:.2f}")
     print("="*60)
 
-
-
-    # Export to logs directory (matching your training setup)
-    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+    # Save to a logs folder in the *current directory* (same folder as this script)
+    log_dir = os.path.join(os.path.dirname(__file__), "logs")
     os.makedirs(log_dir, exist_ok=True)
+
     csv_path = os.path.join(log_dir, "diffusion_data.csv")
     dataframe.to_csv(csv_path, index=False)
     print(f"DataFrame saved to {csv_path}")
+
 
     # Find maximum values
     max_psnr = max(all_psnr)

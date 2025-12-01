@@ -199,9 +199,10 @@ class DiffusionTrainer:
             'mae': []
         }
         
-        # Create logs directory at project root level
-        log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+        # Create logs directory in the CURRENT directory (same folder as this file)
+        log_dir = os.path.join(os.path.dirname(__file__), "logs")
         os.makedirs(log_dir, exist_ok=True)
+
         log_file = os.path.join(log_dir, "diffusion_training_log.txt")
 
         with open(log_file, 'w') as f:
