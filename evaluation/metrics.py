@@ -17,8 +17,8 @@ class InpaintingMetrics:
         self.lpips = None
         
         # Inception model for FID
-        self.inception = inception_v3(pretrained=True, transform_input=False).to(device)
-        self.inception.eval()
+        # self.inception = inception_v3(pretrained=True, transform_input=False).to(device)
+        # self.inception.eval()
     
     def psnr(self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> float:
         """Calculate Peak Signal-to-Noise Ratio."""

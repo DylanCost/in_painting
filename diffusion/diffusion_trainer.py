@@ -122,18 +122,13 @@ class DiffusionTrainer:
         self.model.eval()
         # Create save directory
         os.makedirs(save_dir, exist_ok=True)
-        print('find warning')
         # Initialize metrics calculator
         metrics_calc = InpaintingMetrics(device=self.device)
-        print('find warnings')
         # Collect metrics
         all_psnr = []
         all_ssim = []
         all_mse = []
         all_mae = []
-        
-        out_dir = "./runs/eval_debug"
-        os.makedirs(out_dir, exist_ok=True)
 
         for batch_idx, batch in enumerate(self.val_loader):
             if batch_idx > 5:

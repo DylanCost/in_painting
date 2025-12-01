@@ -136,6 +136,10 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
             filenames=filenames,
             shape=(1, H, W)
         ).to(device)
+
+        # Add this debug:
+        print(f"DEBUG: mask shape={masks.shape}, mask sum={masks.sum(dim=(2,3))[:5]}, expected max area={(32*32)}")
+        print(f"DEBUG: mask unique values={torch.unique(masks[:1])}")
         
         # Add full noise to masked regions (start from complete noise)
         t = torch.full((B,), noise_scheduler.num_timesteps - 1, device=device)
@@ -288,6 +292,7 @@ def evaluate():
     
     # Create deterministic mask generator
     mask_generator = MaskGenerator.for_eval(config.mask)
+    print(f"DEBUG: mask_type={mask_generator.mask_type}, min_size={mask_generator.min_size}, max_size={mask_generator.max_size}")
     
     # Run evaluation
     results = run_evaluation(

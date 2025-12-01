@@ -24,7 +24,7 @@ class UNetDiffusion(nn.Module):
         
         if hidden_dims is None:
             hidden_dims = [64, 128, 256, 512, 512]
-        print(f"UNetDiffusion initialized with hidden_dims: {hidden_dims}")
+        # print(f"UNetDiffusion initialized with hidden_dims: {hidden_dims}")
         
         # Set default attention resolutions if not provided
         if attention_resolutions is None:
@@ -37,7 +37,7 @@ class UNetDiffusion(nn.Module):
             if resolution in attention_resolutions:
                 attention_blocks.append(i)
         
-        print(f"Applying attention at encoder blocks: {attention_blocks} (resolutions: {[input_size // (2 ** (i + 1)) for i in attention_blocks]})")
+        # print(f"Applying attention at encoder blocks: {attention_blocks} (resolutions: {[input_size // (2 ** (i + 1)) for i in attention_blocks]})")
 
         # ========== TIME EMBEDDING (MINIMAL VERSION) ==========
         time_emb_base = 256
