@@ -20,12 +20,16 @@ class InpaintingMetrics:
         self.inception = inception_v3(pretrained=True, transform_input=False).to(device)
         self.inception.eval()
     
-    def psnr(self, pred: torch.Tensor, target: torch.Tensor) -> float:
+    def psnr(self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> float:
         """Calculate Peak Signal-to-Noise Ratio."""
-        mse = torch.mean((pred - target) ** 2)
-        if mse == 0:
-            return float('inf')
-        return 20 * torch.log10(2.0 / torch.sqrt(mse)).item()
+
+        me = ((pred-target) ** 2) * mask
+        total_mask_pixels = mask.sum() * pred.shape[1]
+        mse = me / total_mask_pixels
+    
+        maximum = 2
+        psnr = 10 * torch.log10(maximum**2 / mse).item()
+        return psnr
     
     def ssim(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         """Calculate Structural Similarity Index."""
