@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 from copy import deepcopy
 
 @dataclass
-class ModelConfig:
+class VAEModelConfig:
     """Model architecture configuration."""
     name: str = "unet_vae"
     input_channels: int = 3
@@ -20,7 +20,7 @@ class ModelConfig:
 
 
 @dataclass
-class TrainingConfig:
+class VAETrainingConfig:
     """Training hyperparameters configuration."""
     batch_size: int = 64
     learning_rate: float = 0.0002
@@ -49,7 +49,7 @@ class DataConfig:
 
 
 @dataclass
-class MaskConfig:
+class VAEMaskConfig:
     """Masking strategy configuration."""
     type: str = "random"  # random, center, irregular
     mask_ratio: float = 0.4
@@ -61,7 +61,7 @@ class MaskConfig:
 
 
 @dataclass
-class LoggingConfig:
+class VAELoggingConfig:
     """Experiment tracking and logging configuration."""
     use_wandb: bool = False
     use_tensorboard: bool = True
@@ -75,7 +75,7 @@ class LoggingConfig:
 
 
 @dataclass
-class Config:
+class VAEConfig:
     """Master configuration class combining all sub-configs."""
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
