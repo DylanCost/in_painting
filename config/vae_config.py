@@ -38,7 +38,7 @@ class VAETrainingConfig:
 
 
 @dataclass
-class DataConfig:
+class VAEDataConfig:
     """Dataset configuration."""
     dataset: str = "celeba"
     #data_path: str = "./assets/datasets"
@@ -77,27 +77,27 @@ class VAELoggingConfig:
 @dataclass
 class VAEConfig:
     """Master configuration class combining all sub-configs."""
-    model: ModelConfig = field(default_factory=ModelConfig)
-    training: TrainingConfig = field(default_factory=TrainingConfig)
-    data: DataConfig = field(default_factory=DataConfig)
-    mask: MaskConfig = field(default_factory=MaskConfig)
-    logging: LoggingConfig = field(default_factory=LoggingConfig)
+    model: VAEModelConfig = field(default_factory=VAEModelConfig)
+    training: VAETrainingConfig = field(default_factory=VAETrainingConfig)
+    data: VAEDataConfig = field(default_factory=VAEDataConfig)
+    mask: VAEMaskConfig = field(default_factory=VAEMaskConfig)
+    logging: VAELoggingConfig = field(default_factory=VAELoggingConfig)
 
     @staticmethod
-    def get_default() -> "Config":
+    def get_default() -> "VAEConfig":
         """Get default configuration."""
-        return Config(
-            model=ModelConfig(),
-            training=TrainingConfig(),
-            data=DataConfig(),
-            mask=MaskConfig(),
-            logging=LoggingConfig(),
+        return VAEConfig(
+            model=VAEModelConfig(),
+            training=VAETrainingConfig(),
+            data=VAEDataConfig(),
+            mask=VAEMaskConfig(),
+            logging=VAELoggingConfig(),
         )
 
     @staticmethod
-    def get_pretrained() -> "Config":
+    def get_pretrained() -> "VAEConfig":
         """Get configuration for training with pretrained weights."""
-        config = Config.get_default()
+        config = VAEConfig.get_default()
         
         # Model settings for pretrained
         config.model.pretrained_encoder = "resnet"
@@ -151,6 +151,6 @@ class VAEConfig:
                 else:
                     setattr(section_config, param, value)
 
-    def copy(self) -> "Config":
+    def copy(self) -> "VAEConfig":
         """Create a deep copy of the config."""
         return deepcopy(self)
