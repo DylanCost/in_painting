@@ -2,8 +2,14 @@
 
 
 !*.py
+!*.ipynb
 !*.md
 !requirements.txt
 !.gitignore
 
 !*/
+
+all_model_results/
+logs/
+scratch/
+assets/
