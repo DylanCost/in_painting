@@ -13,3 +13,5 @@ all_model_results/
 logs/
 scratch/
 assets/
+results/
+weights/
