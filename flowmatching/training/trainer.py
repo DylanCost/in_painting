@@ -300,7 +300,8 @@ class Trainer:
         Returns:
             Dictionary with training history containing:
                 - train_loss: List of training losses per epoch
-                - val_loss: List of validation losses per epoch
+                - val_loss: List of validation MAE values (kept for compatibility)
+                - val_mae: List of validation MAE values per epoch
                 - val_psnr: List of validation PSNR per epoch
                 - val_ssim: List of validation SSIM per epoch
                 - learning_rate: List of learning rates per epoch
@@ -314,6 +315,7 @@ class Trainer:
         history = {
             "train_loss": [],
             "val_loss": [],
+            "val_mae": [],
             "val_psnr": [],
             "val_ssim": [],
             "learning_rate": [],
@@ -360,6 +362,7 @@ class Trainer:
                 # Record history
                 history["train_loss"].append(train_metrics["loss"])
                 history["val_loss"].append(val_metrics["loss"])
+                history["val_mae"].append(val_metrics.get("mae", val_metrics["loss"]))
                 history["val_psnr"].append(val_metrics["psnr"])
                 history["val_ssim"].append(val_metrics["ssim"])
                 history["learning_rate"].append(self.optimizer.param_groups[0]["lr"])
