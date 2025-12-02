@@ -5,7 +5,7 @@ random masking for the inpainting task.
 """
 
 import torch
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader, random_split, Subset
 from torchvision import transforms
 from torchvision.datasets import CelebA
 from typing import Dict, Optional, Tuple, Literal
@@ -15,8 +15,7 @@ import sys
 # Add parent directory to path to import CelebADataset
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data.celeba_dataset import CelebADataset
-
-from .masking import RandomRectangularMask
+from masking.mask_generator import MaskGenerator
 
 
 class CelebAInpainting(Dataset):
@@ -64,6 +63,7 @@ class CelebAInpainting(Dataset):
         normalize: bool = True,
         mask_type: str = "random",
         mask_seed: Optional[int] = None,
+        cache_dir: Optional[str] = None,
     ):
         """Initialize CelebA inpainting dataset.
 
@@ -78,6 +78,7 @@ class CelebAInpainting(Dataset):
             normalize: Whether to normalize to [-1, 1]
             mask_type: Type of mask to generate ('random', 'center', 'irregular')
             mask_seed: Random seed for reproducible mask generation (optional)
+            cache_dir: Directory for caching deterministic masks (optional)
         """
         self.root = root
         self.split = split
@@ -119,13 +120,15 @@ class CelebAInpainting(Dataset):
         )
 
         # Initialize mask generator
-        self.mask_generator = RandomRectangularMask(
-            image_size=image_size,
+        # Use deterministic masks for validation and test splits
+        deterministic = split in ["valid", "test"]
+        self.mask_generator = MaskGenerator(
+            mask_type=mask_type,
             min_size=min_mask_size,
             max_size=max_mask_size,
-            channels=1,
-            mask_type=mask_type,
             seed=mask_seed,
+            cache_dir=cache_dir,
+            deterministic=deterministic,
         )
 
     def __len__(self) -> int:
@@ -146,10 +149,27 @@ class CelebAInpainting(Dataset):
         # Load image from CelebADataset (returns dict with 'image', 'filename', 'idx')
         sample = self.celeba[idx]
         image = sample["image"]
+        filename = sample["filename"]
 
-        # Generate random mask
-        mask = self.mask_generator.generate_mask(batch_size=1, device=image.device)
-        mask = mask.squeeze(0)  # Remove batch dimension: [1, H, W]
+        # Generate mask - deterministic for val/test, random for train
+        if self.mask_generator.deterministic:
+            # Use filename-based deterministic mask generation
+            # Returns [1, 1, H, W] for single filename
+            mask = self.mask_generator.generate_for_filenames(
+                [filename], shape=(1, self.image_size, self.image_size)
+            )
+            mask = mask.squeeze(0)  # Remove batch dimension: [1, 1, H, W] -> [1, H, W]
+        else:
+            # Random mask generation for training
+            # generate() with shape (1, H, W) returns [1, 1, H, W]
+            mask = self.mask_generator.generate(
+                shape=(1, self.image_size, self.image_size)
+            )
+            mask = mask.squeeze(0)  # Remove extra dimension: [1, 1, H, W] -> [1, H, W]
+
+        # Move mask to same device as image
+        if mask.device != image.device:
+            mask = mask.to(image.device)
 
         # Return original image - flow matching will handle the masking
         # by interpolating masked regions with noise
@@ -162,6 +182,7 @@ class CelebAInpainting(Dataset):
         num_workers: int = 4,
         pin_memory: bool = True,
         drop_last: bool = None,
+        subsample_fraction: float = 1.0,
     ) -> DataLoader:
         """Create a DataLoader for this dataset.
 
@@ -171,6 +192,7 @@ class CelebAInpainting(Dataset):
             num_workers: Number of worker processes
             pin_memory: Whether to pin memory for faster GPU transfer
             drop_last: Whether to drop last incomplete batch (default: True for train)
+            subsample_fraction: Fraction of dataset to use (default: 1.0 for full dataset)
 
         Returns:
             DataLoader instance
@@ -182,6 +204,9 @@ class CelebAInpainting(Dataset):
             ...     images = batch['image']
             ...     masks = batch['mask']
             ...     # Training code here
+
+            >>> # Use only 10% of data for debugging
+            >>> loader = dataset.get_dataloader(batch_size=32, subsample_fraction=0.1)
         """
         # Set defaults based on split
         if shuffle is None:
@@ -189,8 +214,16 @@ class CelebAInpainting(Dataset):
         if drop_last is None:
             drop_last = self.split == "train"
 
+        # Apply subsampling if requested
+        dataset = self
+        if subsample_fraction < 1.0:
+            total_samples = len(self)
+            subsample_size = int(total_samples * subsample_fraction)
+            indices = list(range(subsample_size))
+            dataset = Subset(self, indices)
+
         return DataLoader(
-            self,
+            dataset,
             batch_size=batch_size,
             shuffle=shuffle,
             num_workers=num_workers,
