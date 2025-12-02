@@ -16,12 +16,12 @@ default_config = VAEConfig.get_default()
 pretrained_config = VAEConfig.get_pretrained()
 
 __all__ = [
-    "Config",
-    "ModelConfig",
-    "TrainingConfig",
-    "DataConfig",
-    "MaskConfig",
-    "LoggingConfig",
+    "VAEConfig",
+    "VAEModelConfig",
+    "VAETrainingConfig",
+    "VAEDataConfig",
+    "VAEMaskConfig",
+    "VAELoggingConfig",
     "default_config",
     "pretrained_config",
 ]
