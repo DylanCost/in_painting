@@ -1,16 +1,20 @@
 """Configuration module for VAE inpainting project."""
 
+from config.vae_config import (
+    VAEConfig,
+    VAEModelConfig,
+    VAETrainingConfig,
+    VAEDataConfig,
+    VAEMaskConfig,
+    VAELoggingConfig,
+)
+
 from config.common_config import (
     Config,
     UNetConfig,
     DataConfig,
     MaskConfig,
     LoggingConfig,
-)
-from config.vae_config import (
-    VAEConfig,
-    VAEModelConfig,
-    VAETrainingConfig,
 )
 
 # Pre-instantiated default configuration
@@ -28,6 +32,9 @@ __all__ = [
     "VAEConfig",
     "VAEModelConfig",
     "VAETrainingConfig",
+    "VAEDataConfig",
+    "VAEMaskConfig",
+    "VAELoggingConfig",
     "default_config",
     "pretrained_config",
 ]

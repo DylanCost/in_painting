@@ -1,22 +1,19 @@
-"""VAE-specific configuration for inpainting project."""
+"""Configuration system for VAE inpainting project."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional
-from config.common_config import (
-    Config,
-    UNetConfig,
-    DataConfig,
-    MaskConfig,
-    LoggingConfig,
-)
-
+from copy import deepcopy
 
 @dataclass
 class VAEModelConfig:
-    """VAE-specific model configuration (non-U-Net settings)."""
-
+    """Model architecture configuration."""
     name: str = "unet_vae"
-    latent_dim: int = 512
+    input_channels: int = 3
+    latent_dim: int = 32
+    hidden_dims: List[int] = field(default_factory=lambda: [64, 128, 256, 512, 512])
+    use_attention: bool = True
+    use_skip_connections: bool = True
+    dropout: float = 0.1
     pretrained_encoder: Optional[str] = None
     encoder_checkpoint: Optional[str] = None
     freeze_encoder_stages: int = 0
@@ -24,9 +21,8 @@ class VAEModelConfig:
 
 @dataclass
 class VAETrainingConfig:
-    """VAE training hyperparameters configuration."""
-
-    batch_size: int = 32
+    """Training hyperparameters configuration."""
+    batch_size: int = 64
     learning_rate: float = 0.0002
     beta1: float = 0.5
     beta2: float = 0.999
@@ -42,26 +38,60 @@ class VAETrainingConfig:
 
 
 @dataclass
-class VAEConfig(Config):
-    """VAE-specific configuration combining all sub-configs."""
+class VAEDataConfig:
+    """Dataset configuration."""
+    dataset: str = "celeba"
+    #data_path: str = "./assets/datasets"
+    data_path: str = "/content/in_painting/assets/datasets"
+    image_size: int = 128
+    num_workers: int = 4
+    augmentation: bool = True
 
+
+@dataclass
+class VAEMaskConfig:
+    """Masking strategy configuration."""
+    type: str = "random"  # random, center, irregular
+    mask_ratio: float = 0.4
+    min_size: int = 16
+    max_size: int = 64
+    seed: int = 42
+    #cache_dir: str = "./assets/masks"
+    cache_dir: str = "/content/in_painting/assets/masks"
+
+
+@dataclass
+class VAELoggingConfig:
+    """Experiment tracking and logging configuration."""
+    use_wandb: bool = False
+    use_tensorboard: bool = True
+    log_interval: int = 100
+    save_interval: int = 5
+    sample_interval: int = 500
+    #checkpoint_dir: str = "./weights"
+    checkpoint_dir: str = "/content/drive/MyDrive/vae_weights"
+    #log_dir: str = "./logs"
+    log_dir: str = "/content/drive/MyDrive/vae_logs"
+
+
+@dataclass
+class VAEConfig:
+    """Master configuration class combining all sub-configs."""
     model: VAEModelConfig = field(default_factory=VAEModelConfig)
     training: VAETrainingConfig = field(default_factory=VAETrainingConfig)
-    unet: UNetConfig = field(default_factory=UNetConfig)
-    data: DataConfig = field(default_factory=DataConfig)
-    mask: MaskConfig = field(default_factory=MaskConfig)
-    logging: LoggingConfig = field(default_factory=LoggingConfig)
+    data: VAEDataConfig = field(default_factory=VAEDataConfig)
+    mask: VAEMaskConfig = field(default_factory=VAEMaskConfig)
+    logging: VAELoggingConfig = field(default_factory=VAELoggingConfig)
 
     @staticmethod
     def get_default() -> "VAEConfig":
-        """Get default VAE configuration."""
+        """Get default configuration."""
         return VAEConfig(
             model=VAEModelConfig(),
             training=VAETrainingConfig(),
-            unet=UNetConfig(),
-            data=DataConfig(),
-            mask=MaskConfig(),
-            logging=LoggingConfig(),
+            data=VAEDataConfig(),
+            mask=VAEMaskConfig(),
+            logging=VAELoggingConfig(),
         )
 
     @staticmethod
@@ -85,5 +115,42 @@ class VAEConfig(Config):
             "epoch_15": 1,
             "epoch_20": 0,
         }
-
+        
         return config
+
+    def to_dict(self) -> Dict:
+        """Convert config to dictionary (for logging/serialization)."""
+        return asdict(self)
+
+    def apply_overrides(self, **kwargs) -> None:
+        """Apply command-line argument overrides to config.
+        
+        Args:
+            **kwargs: Keyword arguments in format 'section.key=value'
+                     e.g., training.batch_size=64, model.latent_dim=256
+        """
+        for key, value in kwargs.items():
+            if '.' not in key:
+                continue
+            
+            section, param = key.split('.', 1)
+            if not hasattr(self, section):
+                continue
+            
+            section_config = getattr(self, section)
+            if hasattr(section_config, param):
+                # Try to convert value to appropriate type
+                current_value = getattr(section_config, param)
+                if current_value is not None:
+                    value_type = type(current_value)
+                    try:
+                        converted_value = value_type(value)
+                        setattr(section_config, param, converted_value)
+                    except (ValueError, TypeError):
+                        setattr(section_config, param, value)
+                else:
+                    setattr(section_config, param, value)
+
+    def copy(self) -> "VAEConfig":
+        """Create a deep copy of the config."""
+        return deepcopy(self)

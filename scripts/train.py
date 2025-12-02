@@ -8,9 +8,10 @@ import sys
 import os
 
 # Add project root to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+#sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config import default_config, pretrained_config, Config
+from config import default_config, pretrained_config, VAEConfig
 from data.celeba_dataset import CelebADataset
 from models.unet_vae import UNetVAE
 from losses.vae_loss import VAELoss
@@ -49,6 +50,7 @@ def main():
         input_channels=config.model.input_channels,
         latent_dim=config.model.latent_dim,
         hidden_dims=config.model.hidden_dims,
+        image_size=config.data.image_size,
         use_attention=config.model.use_attention,
         use_skip_connections=config.model.use_skip_connections,
         pretrained_encoder=config.model.pretrained_encoder,

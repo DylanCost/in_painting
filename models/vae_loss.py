@@ -1,152 +1,328 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision import models
-from typing import Dict, Optional
+from typing import List, Tuple, Optional, Dict
+from models.pretrained_encoders import (
+    PretrainedResNetEncoder, 
+    PretrainedVAEEncoder,
+    PretrainedStyleGANEncoder
+)
 
 
-class VAELoss(nn.Module):
-    """Combined loss for VAE inpainting."""
+class UNetVAE(nn.Module):
+    """U-Net based VAE with optional pretrained encoder."""
     
     def __init__(
         self,
-        kl_weight: float = 0.001,
-        perceptual_weight: float = 0.1,
-        adversarial_weight: float = 0.001,
-        use_perceptual: bool = True
+        input_channels: int = 3,
+        latent_dim: int = 512,
+        hidden_dims: List[int] = None,
+        image_size: int = 128,
+        use_attention: bool = True,
+        use_skip_connections: bool = True,
+        pretrained_encoder: Optional[str] = None,
+        encoder_checkpoint: Optional[str] = None,
+        freeze_encoder_stages: int = 0
     ):
         super().__init__()
         
-        self.kl_weight = kl_weight
-        self.perceptual_weight = perceptual_weight
-        self.adversarial_weight = adversarial_weight
+        self.latent_dim = latent_dim
+        self.use_skip_connections = use_skip_connections
+        self.image_size = image_size
         
-        # Reconstruction losses
-        self.l1_loss = nn.L1Loss()
-        self.l2_loss = nn.MSELoss()
+        if hidden_dims is None:
+            hidden_dims = [64, 128, 256, 512, 512]
         
-        # Perceptual loss
-        if use_perceptual:
-            self.perceptual_loss = PerceptualLoss()
+        self.hidden_dims = hidden_dims
+        
+        # Choose encoder based on pretrained option
+        if pretrained_encoder == 'resnet':
+            self.encoder = PretrainedResNetEncoder(
+                model_name='resnet50',
+                pretrained='imagenet',
+                frozen_stages=freeze_encoder_stages,
+                output_channels=hidden_dims
+            )
+        elif pretrained_encoder == 'vggface':
+            self.encoder = PretrainedResNetEncoder(
+                model_name='resnet50',
+                pretrained='vggface2',
+                frozen_stages=freeze_encoder_stages,
+                output_channels=hidden_dims
+            )
+        elif pretrained_encoder == 'vae' and encoder_checkpoint:
+            self.encoder = PretrainedVAEEncoder(
+                checkpoint_path=encoder_checkpoint,
+                frozen=(freeze_encoder_stages > 0)
+            )
+        elif pretrained_encoder == 'stylegan':
+            self.encoder = PretrainedStyleGANEncoder(
+                model_path=encoder_checkpoint,
+                frozen_layers=freeze_encoder_stages
+            )
         else:
-            self.perceptual_loss = None
+            self.encoder = UNetEncoder(
+                input_channels=input_channels,
+                hidden_dims=hidden_dims,
+                use_attention=use_attention
+            )
+        
+        # Based on the error message, we know the actual flattened size is 32768
+        # This corresponds to 512 channels * 8 * 8 spatial dimensions
+        self.flattened_size = 32768
+        self.encoder_output_channels = hidden_dims[-1]  # 512
+        self.encoder_output_size = 8  # 8x8 spatial dimensions
+        
+        # Latent space - use the correct size
+        self.fc_mu = nn.Linear(self.flattened_size, latent_dim)
+        self.fc_var = nn.Linear(self.flattened_size, latent_dim)
+        
+        # Decoder input
+        self.decoder_input = nn.Linear(latent_dim, self.flattened_size)
+        
+        # Decoder
+        self.decoder = UNetDecoder(
+            output_channels=input_channels,
+            hidden_dims=list(reversed(hidden_dims)),
+            use_attention=use_attention,
+            target_size=self.image_size  # Pass the target size
+        )
     
-    def forward(
-        self,
-        reconstruction: torch.Tensor,
-        target: torch.Tensor,
-        mu: torch.Tensor,
-        log_var: torch.Tensor,
-        mask: Optional[torch.Tensor] = None,
-        discriminator_fake: Optional[torch.Tensor] = None
-    ) -> Dict[str, torch.Tensor]:
-        """Calculate total loss and individual components."""
-        
-        losses = {}
-        
-        # Reconstruction loss (only on masked regions if mask provided)
+    def encode(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor, List[torch.Tensor]]:
+        """Encode input to latent distribution parameters."""
+        # Concatenate mask if provided
         if mask is not None:
-            rec_loss = self.l1_loss(reconstruction * mask, target * mask)
-            # Also add loss on unmasked regions with lower weight
-            rec_loss += 0.1 * self.l1_loss(reconstruction * (1 - mask), target * (1 - mask))
-        else:
-            rec_loss = self.l1_loss(reconstruction, target)
+            x = torch.cat([x, mask], dim=1)
+            
+        features, skip_connections = self.encoder(x)
+        features = features.flatten(start_dim=1)
         
-        losses['reconstruction'] = rec_loss
+        mu = self.fc_mu(features)
+        log_var = self.fc_var(features)
         
-        # KL divergence loss
-        kl_loss = -0.5 * torch.mean(1 + log_var - mu.pow(2) - log_var.exp())
-        losses['kl'] = kl_loss * self.kl_weight
-        
-        # Perceptual loss
-        if self.perceptual_loss is not None:
-            perc_loss = self.perceptual_loss(reconstruction, target)
-            losses['perceptual'] = perc_loss * self.perceptual_weight
-        
-        # Adversarial loss (if discriminator output provided)
-        if discriminator_fake is not None:
-            adv_loss = -torch.mean(torch.log(discriminator_fake + 1e-8))
-            losses['adversarial'] = adv_loss * self.adversarial_weight
-        
-        # Total loss
-        losses['total'] = sum(losses.values())
-        
-        return losses
-
-
-class PerceptualLoss(nn.Module):
-    """Perceptual loss using VGG features."""
+        return mu, log_var, skip_connections
     
-    def __init__(self, feature_layers: list = None):
+    def reparameterize(self, mu: torch.Tensor, log_var: torch.Tensor) -> torch.Tensor:
+        """Reparameterization trick."""
+        std = torch.exp(0.5 * log_var)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+    
+    def decode(self, z: torch.Tensor, skip_connections: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
+        """Decode latent vector to image."""
+        features = self.decoder_input(z)
+        
+        # Reshape to (batch, 512, 8, 8) based on actual encoder output
+        features = features.view(
+            -1, 
+            self.encoder_output_channels,  # 512
+            self.encoder_output_size,      # 8
+            self.encoder_output_size       # 8
+        )
+        
+        if self.use_skip_connections and skip_connections is not None:
+            output = self.decoder(features, skip_connections)
+        else:
+            output = self.decoder(features, None)
+
+        # IMPORTANT: Ensure output matches the configured image size
+        # The decoder might only output 128x128, so we need to upsample to 256x256
+        if output.shape[2] != self.image_size or output.shape[3] != self.image_size:
+            output = F.interpolate(output, size=(self.image_size, self.image_size), 
+                                   mode='bilinear', align_corners=False)
+            
+        return torch.tanh(output)
+    
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
+        """Forward pass through VAE."""
+        mu, log_var, skip_connections = self.encode(x, mask)
+        z = self.reparameterize(mu, log_var)
+        reconstruction = self.decode(z, skip_connections)
+        
+        return {
+            'reconstruction': reconstruction,
+            'mu': mu,
+            'log_var': log_var,
+            'z': z
+        }
+
+
+class UNetEncoder(nn.Module):
+    """U-Net style encoder with skip connections."""
+    
+    def __init__(
+        self,
+        input_channels: int,
+        hidden_dims: List[int],
+        use_attention: bool = True
+    ):
         super().__init__()
         
-        if feature_layers is None:
-            feature_layers = ['relu1_2', 'relu2_2', 'relu3_3', 'relu4_3']
+        self.blocks = nn.ModuleList()
+        self.attention_blocks = nn.ModuleList()
         
-        # Load pretrained VGG19
-        vgg = models.vgg19(pretrained=True).features
+        in_channels = input_channels + 1  # +1 for mask channel
         
-        # Freeze parameters
-        for param in vgg.parameters():
-            param.requires_grad = False
-        
-        # Extract feature layers
-        self.feature_extractor = nn.ModuleDict()
-        layer_idx = 0
-        
-        for name, layer in vgg.named_children():
-            if isinstance(layer, nn.Conv2d):
-                layer_idx += 1
-                name = f'conv{layer_idx}'
-            elif isinstance(layer, nn.ReLU):
-                name = f'relu{layer_idx}'
-                layer = nn.ReLU(inplace=False)
-            elif isinstance(layer, nn.MaxPool2d):
-                name = f'pool{layer_idx}'
+        for i, out_channels in enumerate(hidden_dims):
+            self.blocks.append(
+                EncoderBlock(in_channels, out_channels)
+            )
             
-            self.feature_extractor[name] = layer
+            if use_attention and i >= len(hidden_dims) - 2:
+                self.attention_blocks.append(
+                    SelfAttention(out_channels)
+                )
+            else:
+                self.attention_blocks.append(nn.Identity())
+                
+            in_channels = out_channels
+    
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+        skip_connections = []
+        
+        for block, attention in zip(self.blocks, self.attention_blocks):
+            x = block(x)
+            x = attention(x)
+            skip_connections.append(x)
             
-            if name in feature_layers:
-                break
+        return x, skip_connections[:-1]  # Don't include last feature as skip
+
+
+class UNetDecoder(nn.Module):
+    """U-Net style decoder with skip connections."""
+    
+    def __init__(
+        self,
+        output_channels: int,
+        hidden_dims: List[int],
+        use_attention: bool = True,
+        target_size: int = 128  # Add target size parameter
+    ):
+        super().__init__()
         
-        self.feature_layers = feature_layers
+        self.blocks = nn.ModuleList()
+        self.attention_blocks = nn.ModuleList()
+        self.target_size = target_size
         
-        # Normalization
-        self.register_buffer(
-            'mean',
-            torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+        for i, (in_channels, out_channels) in enumerate(zip(hidden_dims[:-1], hidden_dims[1:])):
+            # Account for skip connections (doubles channels)
+            actual_in_channels = in_channels * 2 if i > 0 else in_channels
+            
+            self.blocks.append(
+                DecoderBlock(actual_in_channels, out_channels)
+            )
+            
+            if use_attention and i <= 1:
+                self.attention_blocks.append(
+                    SelfAttention(out_channels)
+                )
+            else:
+                self.attention_blocks.append(nn.Identity())
+        
+        # Add an extra upsampling block to get back to original size
+        self.extra_upsample = nn.Sequential(
+            nn.ConvTranspose2d(hidden_dims[-1], hidden_dims[-1], 4, stride=2, padding=1),
+            nn.BatchNorm2d(hidden_dims[-1]),
+            nn.GELU()
         )
-        self.register_buffer(
-            'std',
-            torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+        
+        # Final convolution
+        self.final_conv = nn.Sequential(
+            nn.Conv2d(hidden_dims[-1], hidden_dims[-1], 3, padding=1),
+            nn.BatchNorm2d(hidden_dims[-1]),
+            nn.GELU(),
+            nn.Conv2d(hidden_dims[-1], output_channels, 3, padding=1)
         )
     
-    def normalize(self, x: torch.Tensor) -> torch.Tensor:
-        """Normalize input for VGG."""
-        # Denormalize from [-1, 1] to [0, 1]
-        x = (x + 1) / 2
-        # Normalize for VGG
-        return (x - self.mean) / self.std
+    def forward(self, x: torch.Tensor, skip_connections: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
+        if skip_connections is not None:
+            skip_connections = list(reversed(skip_connections))
+        
+        for i, (block, attention) in enumerate(zip(self.blocks, self.attention_blocks)):
+            if skip_connections is not None and i > 0 and i <= len(skip_connections):
+                # Concatenate skip connection
+                skip = skip_connections[i - 1]
+                # Resize if necessary
+                if x.shape[2:] != skip.shape[2:]:
+                    x = F.interpolate(x, size=skip.shape[2:], mode='bilinear', align_corners=False)
+                x = torch.cat([x, skip], dim=1)
+                
+            x = block(x)
+            x = attention(x)
+        
+        # Extra upsampling to reach target size
+        x = self.extra_upsample(x)
+        
+        # Ensure we reach the target size
+        if x.shape[2] != self.target_size or x.shape[3] != self.target_size:
+            x = F.interpolate(x, size=(self.target_size, self.target_size), 
+                              mode='bilinear', align_corners=False)
+        
+        return self.final_conv(x)
+
+
+class EncoderBlock(nn.Module):
+    """Encoder block with downsampling."""
     
-    def extract_features(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        """Extract VGG features."""
-        features = {}
-        x = self.normalize(x)
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
         
-        for name, layer in self.feature_extractor.items():
-            x = layer(x)
-            if name in self.feature_layers:
-                features[name] = x
-        
-        return features
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 4, stride=2, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU(),
+            nn.Conv2d(out_channels, out_channels, 3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU()
+        )
     
-    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        """Calculate perceptual loss."""
-        pred_features = self.extract_features(pred)
-        target_features = self.extract_features(target)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.conv(x)
+
+
+class DecoderBlock(nn.Module):
+    """Decoder block with upsampling."""
+    
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
         
-        loss = 0
-        for layer in self.feature_layers:
-            loss += F.l1_loss(pred_features[layer], target_features[layer])
+        self.conv = nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, 4, stride=2, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU(),
+            nn.Conv2d(out_channels, out_channels, 3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU()
+        )
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.conv(x)
+
+
+class SelfAttention(nn.Module):
+    """Self-attention module for capturing long-range dependencies."""
+    
+    def __init__(self, channels: int):
+        super().__init__()
         
-        return loss / len(self.feature_layers)
+        self.channels = channels
+        self.query = nn.Conv2d(channels, channels // 8, 1)
+        self.key = nn.Conv2d(channels, channels // 8, 1)
+        self.value = nn.Conv2d(channels, channels, 1)
+        self.gamma = nn.Parameter(torch.zeros(1))
+        
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        batch_size, channels, height, width = x.shape
+        
+        # Generate query, key, value
+        q = self.query(x).view(batch_size, -1, height * width).permute(0, 2, 1)
+        k = self.key(x).view(batch_size, -1, height * width)
+        v = self.value(x).view(batch_size, -1, height * width)
+        
+        # Attention
+        attention = F.softmax(torch.bmm(q, k), dim=-1)
+        out = torch.bmm(v, attention.permute(0, 2, 1))
+        out = out.view(batch_size, channels, height, width)
+        
+        # Residual connection with learnable weight
+        return x + self.gamma * out
