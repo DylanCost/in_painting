@@ -58,9 +58,6 @@ class FlowMatchingConfig:
     min_lr: float = 1e-6
     subsample_fraction: float = 1.0  # Fraction of training data to use (for debugging)
 
-    # Validation parameters
-    val_timesteps: List[float] = field(default_factory=lambda: [0.25, 0.5, 0.75])
-
     # Sampling parameters
     num_sampling_steps: int = 100
     num_eval_samples: int = 1000
@@ -282,7 +279,6 @@ def train_model(
         checkpoint_dir=str(run_dir / "checkpoints"),
         log_dir=str(run_dir / "logs"),
         save_every=config.common.logging.save_interval,
-        val_timesteps=config.flowmatching.val_timesteps,
         gradient_clip=1.0,
         warmup_steps=config.flowmatching.warmup_steps,
     )
@@ -318,12 +314,13 @@ def plot_learning_curves(history: Dict[str, List[float]], run_dir: Path):
         axes[0, 0].set_ylabel("Loss")
         axes[0, 0].grid(True)
 
-    # Validation loss
-    if history["val_loss"]:
-        axes[0, 1].plot(history["val_loss"])
-        axes[0, 1].set_title("Validation Loss")
+    # Validation MAE (falls back to legacy val_loss if needed)
+    val_mae_history = history.get("val_mae", history.get("val_loss", []))
+    if val_mae_history:
+        axes[0, 1].plot(val_mae_history)
+        axes[0, 1].set_title("Validation MAE")
         axes[0, 1].set_xlabel("Epoch")
-        axes[0, 1].set_ylabel("Loss")
+        axes[0, 1].set_ylabel("MAE")
         axes[0, 1].grid(True)
 
     # Validation PSNR
@@ -362,7 +359,15 @@ def save_history_csv(history: Dict[str, List[float]], run_dir: Path):
 
         # Header
         writer.writerow(
-            ["epoch", "train_loss", "val_loss", "val_psnr", "val_ssim", "learning_rate"]
+            [
+                "epoch",
+                "train_loss",
+                "val_loss",
+                "val_mae",
+                "val_psnr",
+                "val_ssim",
+                "learning_rate",
+            ]
         )
 
         # Data rows
@@ -379,6 +384,12 @@ def save_history_csv(history: Dict[str, List[float]], run_dir: Path):
                     (
                         history["val_loss"][epoch]
                         if epoch < len(history["val_loss"])
+                        else ""
+                    ),
+                    (
+                        history.get("val_mae", history.get("val_loss", []))[epoch]
+                        if epoch
+                        < len(history.get("val_mae", history.get("val_loss", [])))
                         else ""
                     ),
                     (

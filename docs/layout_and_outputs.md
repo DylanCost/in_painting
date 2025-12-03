@@ -62,7 +62,7 @@ Run outputs and conventions
   - checkpoints/
   - examples/ (triptych_{idx}.png; examples_grid.png optional)
 - Optional:
-  - history.csv (per-epoch metrics/training history)
+  - history.csv (per-epoch metrics/training history; columns currently include epoch, train_loss, val_loss, val_mae, val_psnr, val_ssim, learning_rate)
 
 eval_results.json schema v1 (masked-only, CelebA-focused)
 - timestamp: ISO 8601 run time

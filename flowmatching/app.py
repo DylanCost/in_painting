@@ -8,7 +8,8 @@ import sys
 import json
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
+import logging
 
 # Add project root to Python path to enable absolute imports
 # This is necessary when running the script from within the flowmatching directory
@@ -31,6 +32,20 @@ from flowmatching.flow import ODESampler, HeunSampler
 from flowmatching.training.metrics import compute_psnr, compute_ssim, denormalize_image
 from masking.mask_generator import MaskGenerator
 import torchvision.transforms.functional as TF
+
+try:
+    from flowmatching.pipeline import PipelineConfig
+except Exception:
+    PipelineConfig = None
+
+
+logger = logging.getLogger("flowmatching.app")
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 
 # Page configuration
@@ -106,6 +121,75 @@ class CheckpointInfo:
     checkpoint_type: str  # "best" or "last"
     display_name: str
     metrics: Optional[Dict[str, float]] = None
+
+
+def load_run_config_snapshot(checkpoint_path: Path) -> Optional[Dict[str, Any]]:
+    """Load the config snapshot associated with a checkpoint if available."""
+    run_dir = checkpoint_path.parent.parent
+    config_path = run_dir / "config_snapshot.json"
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                return json.load(f)
+        except Exception as exc:
+            logger.warning("Failed to read config snapshot at %s: %s", config_path, exc)
+    return None
+
+
+def infer_hidden_dims_from_state(state_dict: Dict[str, torch.Tensor]) -> List[int]:
+    """Infer encoder hidden dimensions from a checkpoint state dict."""
+    hidden_dims = []
+    idx = 0
+    while True:
+        weight_key = f"encoder.blocks.{idx}.conv1.0.weight"
+        if weight_key not in state_dict:
+            break
+        hidden_dims.append(state_dict[weight_key].shape[0])
+        idx += 1
+    return hidden_dims
+
+
+def get_default_model_config() -> Dict[str, Any]:
+    """Return baseline model hyperparameters shared with the training pipeline."""
+    if PipelineConfig is not None:
+        pipeline_config = PipelineConfig()
+        hidden_dims = list(pipeline_config.common.unet.hidden_dims)
+        image_size = pipeline_config.common.data.image_size
+    else:
+        hidden_dims = [64, 128, 256, 512, 512]
+        image_size = 128
+
+    return {
+        "image_size": image_size,
+        "in_channels": 4,
+        "out_channels": 3,
+        "hidden_dims": hidden_dims,
+        "time_embed_dim": 256,
+    }
+
+
+def resolve_model_config(config_snapshot: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Resolve the model configuration using pipeline defaults and run snapshots."""
+    config = get_default_model_config()
+
+    if config_snapshot:
+        hidden_dims = (
+            config_snapshot.get("common", {})
+            .get("unet", {})
+            .get("hidden_dims")
+        )
+        if hidden_dims:
+            config["hidden_dims"] = hidden_dims
+
+        image_size = (
+            config_snapshot.get("common", {})
+            .get("data", {})
+            .get("image_size")
+        )
+        if image_size:
+            config["image_size"] = image_size
+
+    return config
 
 
 def discover_checkpoints() -> List[CheckpointInfo]:
@@ -193,32 +277,72 @@ def load_model(checkpoint_path: str = None, device: str = "cpu"):
     Returns:
         Tuple of (model, is_trained)
     """
+    checkpoint_snapshot = None
+    checkpoint_path_obj: Optional[Path] = None
+    if checkpoint_path:
+        checkpoint_path_obj = Path(checkpoint_path)
+        checkpoint_snapshot = load_run_config_snapshot(checkpoint_path_obj)
+
+    # Resolve model configuration using pipeline defaults (and checkpoint snapshot if available)
+    model_config = resolve_model_config(checkpoint_snapshot)
+    logger.info("Resolved model configuration: %s", model_config)
+
     # Create model
-    model = create_unet(
-        image_size=128,
-        in_channels=4,  # 3 (RGB) + 1 (mask)
-        out_channels=3,  # RGB
-        hidden_dims=[64, 128, 256, 512],
-        time_embed_dim=256,
-    )
+    model = create_unet(**model_config)
 
     is_trained = False
+    diag_details = {
+        "app_hidden_dims": list(model_config.get("hidden_dims", [])),
+        "model_config": model_config,
+    }
+    if checkpoint_snapshot is not None:
+        config_hidden_dims = (
+            checkpoint_snapshot.get("common", {})
+            .get("unet", {})
+            .get("hidden_dims")
+        )
+        if config_hidden_dims:
+            diag_details["config_hidden_dims"] = config_hidden_dims
 
     # Load checkpoint if provided
-    if checkpoint_path and Path(checkpoint_path).exists():
+    if checkpoint_path_obj is not None and checkpoint_path_obj.exists():
         try:
             checkpoint = torch.load(
-                checkpoint_path, map_location=device, weights_only=False
+                checkpoint_path_obj, map_location=device, weights_only=False
             )
             if "model_state_dict" in checkpoint:
-                model.load_state_dict(checkpoint["model_state_dict"])
+                state_dict = checkpoint["model_state_dict"]
             else:
-                model.load_state_dict(checkpoint)
+                state_dict = checkpoint
+
+            inferred_hidden_dims = infer_hidden_dims_from_state(state_dict)
+            if inferred_hidden_dims:
+                diag_details["checkpoint_hidden_dims"] = inferred_hidden_dims
+
+            logger.info(
+                "Checkpoint diagnostics | app_hidden_dims=%s | checkpoint_hidden_dims=%s | config_hidden_dims=%s",
+                diag_details.get("app_hidden_dims"),
+                diag_details.get("checkpoint_hidden_dims"),
+                diag_details.get("config_hidden_dims"),
+            )
+
+            model.load_state_dict(state_dict)
             is_trained = True
             st.success(f"✅ Loaded trained model from {checkpoint_path}")
         except Exception as e:
+            logger.error("Failed to load checkpoint %s", checkpoint_path, exc_info=True)
             st.warning(f"⚠️ Could not load checkpoint: {e}")
+
+            diag_lines = [
+                f"App hidden_dims: {diag_details.get('app_hidden_dims')}",
+                f"Checkpoint hidden_dims (inferred): {diag_details.get('checkpoint_hidden_dims', 'unknown')}",
+                f"Config hidden_dims: {diag_details.get('config_hidden_dims', 'unknown')}",
+            ]
+            st.info("\n".join(diag_lines))
             st.info("Using untrained model with random weights")
+    elif checkpoint_path:
+        st.warning(f"⚠️ Checkpoint path not found: {checkpoint_path}")
+        st.info("Using untrained model with random weights")
     else:
         st.info("ℹ️ Using untrained model with random weights for demonstration")
 
@@ -338,7 +462,7 @@ def main():
     num_steps = st.sidebar.slider(
         "Number of Sampling Steps",
         min_value=10,
-        max_value=200,
+        max_value=1_000,
         value=100,
         step=10,
         help="More steps = better quality but slower",

@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from typing import Tuple
+from typing import Optional, Tuple
 from scipy import linalg
 from torch.nn.functional import adaptive_avg_pool2d
 from torchvision.models import inception_v3
@@ -31,8 +31,19 @@ class InpaintingMetrics:
         psnr = 10 * torch.log10(maximum**2 / mse).item()
         return psnr
     
-    def ssim(self, pred: torch.Tensor, target: torch.Tensor) -> float:
-        """Calculate Structural Similarity Index."""
+    def ssim(
+        self,
+        pred: torch.Tensor,
+        target: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+    ) -> float:
+        """Calculate Structural Similarity Index.
+        
+        Args:
+            pred: Predicted tensor in [B, C, H, W] format.
+            target: Target tensor in [B, C, H, W] format.
+            mask: Optional binary mask; currently unused but kept for API parity.
+        """
         from skimage.metrics import structural_similarity
         
         pred_np = pred.cpu().numpy().transpose(0, 2, 3, 1)

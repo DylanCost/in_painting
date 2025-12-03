@@ -52,7 +52,7 @@ class UNetEncoder(nn.Module):
     def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         skip_connections = []
         
-        for block, attention in zip(self.blocks, self.attention_blocks):
+        for idx, (block, attention) in enumerate(zip(self.blocks, self.attention_blocks)):
             x = block(x, t_emb)  # Pass time embedding
             x = attention(x)
             skip_connections.append(x)
@@ -80,8 +80,12 @@ class UNetDecoder(nn.Module):
         if attention_blocks is None:
             attention_blocks = []
         
-        # Mirror encoder attention
-        decoder_attention_indices = [len(hidden_dims) - 1 - i for i in attention_blocks]
+        num_blocks = len(hidden_dims)
+        decoder_attention_indices = []
+        for idx in attention_blocks:
+            mirrored_idx = num_blocks - idx - 2
+            if mirrored_idx >= 0:
+                decoder_attention_indices.append(mirrored_idx)
         
         # Create decoder blocks to match encoder blocks
         for i in range(len(hidden_dims)):

@@ -15,7 +15,7 @@ class EncoderBlock(nn.Module):
     Encoder block with double convolution and time embedding injection.
     
     Architecture:
-        Conv(stride=2) -> BN -> LeakyReLU -> Conv -> BN -> LeakyReLU
+        Conv(stride=2) -> BN -> GELU -> Conv -> BN -> GELU
         + Time embedding injection
     
     Args:
@@ -29,7 +29,7 @@ class EncoderBlock(nn.Module):
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 4, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.GELU()
         )
         
         # Time projection
@@ -38,7 +38,7 @@ class EncoderBlock(nn.Module):
         self.conv2 = nn.Sequential(
             nn.Conv2d(out_channels, out_channels, 3, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.GELU()
         )
     
     def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> torch.Tensor:
