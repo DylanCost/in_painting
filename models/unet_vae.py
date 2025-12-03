@@ -15,21 +15,25 @@ class UNetVAE(nn.Module):
     def __init__(
         self,
         input_channels: int = 3,
-        latent_dim: int = 512,
+        latent_dim: int = 32,
         hidden_dims: List[int] = None,
+        image_size: int = 128,
         use_attention: bool = True,
         use_skip_connections: bool = True,
-        pretrained_encoder: Optional[str] = None,  # NEW
-        encoder_checkpoint: Optional[str] = None,  # NEW
-        freeze_encoder_stages: int = 0  # NEW
+        pretrained_encoder: Optional[str] = None,
+        encoder_checkpoint: Optional[str] = None,
+        freeze_encoder_stages: int = 0
     ):
         super().__init__()
         
         self.latent_dim = latent_dim
         self.use_skip_connections = use_skip_connections
+        self.image_size = image_size
         
         if hidden_dims is None:
             hidden_dims = [64, 128, 256, 512, 512]
+        
+        self.hidden_dims = hidden_dims
         
         # Choose encoder based on pretrained option
         if pretrained_encoder == 'resnet':
@@ -63,21 +67,29 @@ class UNetVAE(nn.Module):
                 use_attention=use_attention
             )
         
-        # Latent space
-        self.fc_mu = nn.Linear(hidden_dims[-1] * 4 * 4, latent_dim)
-        self.fc_var = nn.Linear(hidden_dims[-1] * 4 * 4, latent_dim)
+        # For 128x128 images with 5 encoder blocks (each downsamples by 2):
+        # 128 -> 64 -> 32 -> 16 -> 8 -> 4
+        # This gives 512 channels * 4 * 4 spatial dimensions = 8192
+        self.flattened_size = 8192
+        self.encoder_output_channels = hidden_dims[-1]  # 512
+        self.encoder_output_size = 4  # 4x4 spatial dimensions
+        
+        # Latent space - use the correct size
+        self.fc_mu = nn.Linear(self.flattened_size, latent_dim)
+        self.fc_var = nn.Linear(self.flattened_size, latent_dim)
         
         # Decoder input
-        self.decoder_input = nn.Linear(latent_dim, hidden_dims[-1] * 4 * 4)
+        self.decoder_input = nn.Linear(latent_dim, self.flattened_size)
         
         # Decoder
         self.decoder = UNetDecoder(
             output_channels=input_channels,
             hidden_dims=list(reversed(hidden_dims)),
-            use_attention=use_attention
+            use_attention=use_attention,
+            target_size=self.image_size  # Pass the target size
         )
-        
-    def encode(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    
+    def encode(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor, List[torch.Tensor]]:
         """Encode input to latent distribution parameters."""
         # Concatenate mask if provided
         if mask is not None:
@@ -100,12 +112,25 @@ class UNetVAE(nn.Module):
     def decode(self, z: torch.Tensor, skip_connections: Optional[List[torch.Tensor]] = None) -> torch.Tensor:
         """Decode latent vector to image."""
         features = self.decoder_input(z)
-        features = features.view(-1, 512, 4, 4)
+        
+        # Reshape to (batch, 512, 8, 8) based on actual encoder output
+        features = features.view(
+            -1, 
+            self.encoder_output_channels,  # 512
+            self.encoder_output_size,      # 8
+            self.encoder_output_size       # 8
+        )
         
         if self.use_skip_connections and skip_connections is not None:
             output = self.decoder(features, skip_connections)
         else:
             output = self.decoder(features, None)
+
+        # IMPORTANT: Ensure output matches the configured image size
+        # The decoder might only output 128x128, so we need to upsample to 256x256
+        if output.shape[2] != self.image_size or output.shape[3] != self.image_size:
+            output = F.interpolate(output, size=(self.image_size, self.image_size), 
+                                   mode='bilinear', align_corners=False)
             
         return torch.tanh(output)
     
@@ -171,12 +196,14 @@ class UNetDecoder(nn.Module):
         self,
         output_channels: int,
         hidden_dims: List[int],
-        use_attention: bool = True
+        use_attention: bool = True,
+        target_size: int = 128  # Add target size parameter
     ):
         super().__init__()
         
         self.blocks = nn.ModuleList()
         self.attention_blocks = nn.ModuleList()
+        self.target_size = target_size
         
         for i, (in_channels, out_channels) in enumerate(zip(hidden_dims[:-1], hidden_dims[1:])):
             # Account for skip connections (doubles channels)
@@ -193,11 +220,18 @@ class UNetDecoder(nn.Module):
             else:
                 self.attention_blocks.append(nn.Identity())
         
+        # Add an extra upsampling block to get back to original size
+        self.extra_upsample = nn.Sequential(
+            nn.ConvTranspose2d(hidden_dims[-1], hidden_dims[-1], 4, stride=2, padding=1),
+            nn.BatchNorm2d(hidden_dims[-1]),
+            nn.GELU()
+        )
+        
         # Final convolution
         self.final_conv = nn.Sequential(
             nn.Conv2d(hidden_dims[-1], hidden_dims[-1], 3, padding=1),
             nn.BatchNorm2d(hidden_dims[-1]),
-            nn.ReLU(inplace=True),
+            nn.GELU(),
             nn.Conv2d(hidden_dims[-1], output_channels, 3, padding=1)
         )
     
@@ -217,6 +251,14 @@ class UNetDecoder(nn.Module):
             x = block(x)
             x = attention(x)
         
+        # Extra upsampling to reach target size
+        x = self.extra_upsample(x)
+        
+        # Ensure we reach the target size
+        if x.shape[2] != self.target_size or x.shape[3] != self.target_size:
+            x = F.interpolate(x, size=(self.target_size, self.target_size), 
+                              mode='bilinear', align_corners=False)
+        
         return self.final_conv(x)
 
 
@@ -229,10 +271,10 @@ class EncoderBlock(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 4, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.GELU(),
             nn.Conv2d(out_channels, out_channels, 3, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.LeakyReLU(0.2, inplace=True)
+            nn.GELU()
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -248,10 +290,10 @@ class DecoderBlock(nn.Module):
         self.conv = nn.Sequential(
             nn.ConvTranspose2d(in_channels, out_channels, 4, stride=2, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.GELU(),
             nn.Conv2d(out_channels, out_channels, 3, padding=1),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True)
+            nn.GELU()
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:

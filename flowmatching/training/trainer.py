@@ -71,7 +71,6 @@ class Trainer:
         checkpoint_dir: str = "./checkpoints",
         log_dir: str = "./logs",
         save_every: int = 5,
-        val_timesteps: List[float] = None,
         val_sampler: str = "heun",
         val_num_steps: int = 50,
         gradient_clip: Optional[float] = 1.0,
@@ -105,7 +104,6 @@ class Trainer:
         )
         self.save_every = save_every
         # Keep val_timesteps for backward compatibility, but it's no longer used
-        self.val_timesteps = val_timesteps or [0.25, 0.5, 0.75]
         self.val_sampler = val_sampler
         self.val_num_steps = val_num_steps
         self.gradient_clip = gradient_clip
@@ -302,7 +300,8 @@ class Trainer:
         Returns:
             Dictionary with training history containing:
                 - train_loss: List of training losses per epoch
-                - val_loss: List of validation losses per epoch
+                - val_loss: List of validation MAE values (kept for compatibility)
+                - val_mae: List of validation MAE values per epoch
                 - val_psnr: List of validation PSNR per epoch
                 - val_ssim: List of validation SSIM per epoch
                 - learning_rate: List of learning rates per epoch
@@ -316,6 +315,7 @@ class Trainer:
         history = {
             "train_loss": [],
             "val_loss": [],
+            "val_mae": [],
             "val_psnr": [],
             "val_ssim": [],
             "learning_rate": [],
@@ -362,6 +362,7 @@ class Trainer:
                 # Record history
                 history["train_loss"].append(train_metrics["loss"])
                 history["val_loss"].append(val_metrics["loss"])
+                history["val_mae"].append(val_metrics.get("mae", val_metrics["loss"]))
                 history["val_psnr"].append(val_metrics["psnr"])
                 history["val_ssim"].append(val_metrics["ssim"])
                 history["learning_rate"].append(self.optimizer.param_groups[0]["lr"])

@@ -1,16 +1,23 @@
 """Configuration module for VAE inpainting project."""
 
+from config.vae_config import (
+    VAEConfig,
+    VAEModelConfig,
+    VAETrainingConfig,
+    VAEDataConfig,
+    VAEMaskConfig,
+    VAELoggingConfig,
+)
+
 from config.common_config import (
     Config,
     UNetConfig,
     DataConfig,
     MaskConfig,
     LoggingConfig,
-)
-from config.vae_config import (
-    VAEConfig,
-    VAEModelConfig,
-    VAETrainingConfig,
+    ManualMaskSpec,
+    get_triptych_mask_specs,
+    TRIPTYCH_MASK_VERSION,
 )
 
 # Pre-instantiated default configuration
@@ -25,9 +32,15 @@ __all__ = [
     "DataConfig",
     "MaskConfig",
     "LoggingConfig",
+    "ManualMaskSpec",
+    "get_triptych_mask_specs",
+    "TRIPTYCH_MASK_VERSION",
     "VAEConfig",
     "VAEModelConfig",
     "VAETrainingConfig",
+    "VAEDataConfig",
+    "VAEMaskConfig",
+    "VAELoggingConfig",
     "default_config",
     "pretrained_config",
 ]

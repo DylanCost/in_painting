@@ -1,17 +1,154 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim import Adam, lr_scheduler
 import wandb
 from tqdm import tqdm
 import os
+import csv
+import math
 from typing import Dict, Optional
 from torch.utils.tensorboard import SummaryWriter
 from masking.mask_generator import MaskGenerator
 
 
+def compute_psnr(pred: torch.Tensor, target: torch.Tensor, data_range: float = 2.0) -> torch.Tensor:
+    """
+    Compute Peak Signal-to-Noise Ratio.
+    
+    Args:
+        pred: Predicted images (B, C, H, W) in range [-1, 1]
+        target: Target images (B, C, H, W) in range [-1, 1]
+        data_range: The difference between max and min values (2.0 for [-1, 1] range)
+    
+    Returns:
+        Mean PSNR value across the batch
+    """
+    mse = F.mse_loss(pred, target, reduction='none').mean(dim=[1, 2, 3])
+    psnr = 10 * torch.log10((data_range ** 2) / (mse + 1e-8))
+    return psnr.mean()
+
+
+def compute_ssim(
+    pred: torch.Tensor, 
+    target: torch.Tensor, 
+    window_size: int = 11,
+    data_range: float = 2.0,
+    channel: int = 3
+) -> torch.Tensor:
+    """
+    Compute Structural Similarity Index Measure.
+    
+    Args:
+        pred: Predicted images (B, C, H, W) in range [-1, 1]
+        target: Target images (B, C, H, W) in range [-1, 1]
+        window_size: Size of the Gaussian window
+        data_range: The difference between max and min values
+        channel: Number of channels
+    
+    Returns:
+        Mean SSIM value across the batch
+    """
+    # Create Gaussian window
+    def gaussian_window(size: int, sigma: float) -> torch.Tensor:
+        coords = torch.arange(size, dtype=torch.float32) - size // 2
+        g = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
+        g /= g.sum()
+        return g
+    
+    # Create 2D window
+    sigma = 1.5
+    _1d_window = gaussian_window(window_size, sigma)
+    _2d_window = _1d_window.unsqueeze(1) @ _1d_window.unsqueeze(0)  # Outer product
+    _2d_window = _2d_window.unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, window_size, window_size)
+    _2d_window = _2d_window.expand(channel, 1, window_size, window_size).contiguous()
+    window = _2d_window.to(pred.device, dtype=pred.dtype)
+    
+    # Constants for stability
+    C1 = (0.01 * data_range) ** 2
+    C2 = (0.03 * data_range) ** 2
+    
+    # Compute means
+    mu1 = F.conv2d(pred, window, padding=window_size // 2, groups=channel)
+    mu2 = F.conv2d(target, window, padding=window_size // 2, groups=channel)
+    
+    mu1_sq = mu1 ** 2
+    mu2_sq = mu2 ** 2
+    mu1_mu2 = mu1 * mu2
+    
+    # Compute variances and covariance
+    sigma1_sq = F.conv2d(pred ** 2, window, padding=window_size // 2, groups=channel) - mu1_sq
+    sigma2_sq = F.conv2d(target ** 2, window, padding=window_size // 2, groups=channel) - mu2_sq
+    sigma12 = F.conv2d(pred * target, window, padding=window_size // 2, groups=channel) - mu1_mu2
+    
+    # SSIM formula
+    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / \
+               ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
+    
+    return ssim_map.mean()
+
+
+class MetricsTracker:
+    """Track and compute image quality metrics."""
+    
+    def __init__(self, device: str = 'cuda'):
+        self.device = device
+        self.reset()
+    
+    def reset(self):
+        """Reset all accumulated metrics."""
+        self.mse_sum = 0.0
+        self.mae_sum = 0.0
+        self.psnr_sum = 0.0
+        self.ssim_sum = 0.0
+        self.count = 0
+    
+    def update(self, pred: torch.Tensor, target: torch.Tensor, mask: Optional[torch.Tensor] = None):
+        """
+        Update metrics with a new batch.
+        
+        Args:
+            pred: Predicted images (B, C, H, W)
+            target: Target images (B, C, H, W)
+            mask: Optional mask for masked region metrics (B, 1, H, W)
+        """
+        batch_size = pred.shape[0]
+        
+        with torch.no_grad():
+            # MSE
+            mse = F.mse_loss(pred, target, reduction='mean')
+            self.mse_sum += mse.item() * batch_size
+            
+            # MAE
+            mae = F.l1_loss(pred, target, reduction='mean')
+            self.mae_sum += mae.item() * batch_size
+            
+            # PSNR
+            psnr = compute_psnr(pred, target)
+            self.psnr_sum += psnr.item() * batch_size
+            
+            # SSIM
+            ssim = compute_ssim(pred, target, channel=pred.shape[1])
+            self.ssim_sum += ssim.item() * batch_size
+            
+            self.count += batch_size
+    
+    def compute(self) -> Dict[str, float]:
+        """Compute average metrics."""
+        if self.count == 0:
+            return {'mse': 0.0, 'mae': 0.0, 'psnr': 0.0, 'ssim': 0.0}
+        
+        return {
+            'mse': self.mse_sum / self.count,
+            'mae': self.mae_sum / self.count,
+            'psnr': self.psnr_sum / self.count,
+            'ssim': self.ssim_sum / self.count
+        }
+
+
 class Trainer:
-    """Enhanced trainer with pretrained model support."""
+    """Enhanced trainer with pretrained model support and quality metrics."""
     
     def __init__(
         self,
@@ -40,6 +177,9 @@ class Trainer:
             cache_dir=self.mask_config.cache_dir if hasattr(self.mask_config, 'cache_dir') else './assets/masks'
         )
         
+        # Metrics tracker
+        self.metrics_tracker = MetricsTracker(device=device)
+        
         # Setup optimizer with differential learning rates
         self.setup_optimizer()
         
@@ -65,9 +205,15 @@ class Trainer:
         self.checkpoint_dir = config.logging.checkpoint_dir
         os.makedirs(self.checkpoint_dir, exist_ok=True)
         
+        # CSV metrics logging
+        self.metrics_csv_path = os.path.join(self.checkpoint_dir, 'metrics.csv')
+        self.csv_initialized = False
+        
         self.current_epoch = 0
         self.global_step = 0
         self.best_val_loss = float('inf')
+        self.best_val_psnr = 0.0
+        self.best_val_ssim = 0.0
     
     def setup_optimizer(self):
         """Setup optimizer with different LRs for encoder/decoder."""
@@ -110,14 +256,35 @@ class Trainer:
                 self.model.encoder._freeze_stages(stages_to_unfreeze)
                 print(f"Unfroze encoder up to stage {stages_to_unfreeze}")
     
+    def compute_batch_metrics(
+        self, 
+        pred: torch.Tensor, 
+        target: torch.Tensor,
+        mask: Optional[torch.Tensor] = None
+    ) -> Dict[str, float]:
+        """Compute MSE, MAE, PSNR, and SSIM for a single batch."""
+        with torch.no_grad():
+            mse = F.mse_loss(pred, target, reduction='mean').item()
+            mae = F.l1_loss(pred, target, reduction='mean').item()
+            psnr = compute_psnr(pred, target).item()
+            ssim = compute_ssim(pred, target, channel=pred.shape[1]).item()
+        
+        return {
+            'mse': mse,
+            'mae': mae,
+            'psnr': psnr,
+            'ssim': ssim
+        }
+    
     def train_epoch(self) -> Dict[str, float]:
-        """Modified train epoch with progressive unfreezing."""
+        """Modified train epoch with progressive unfreezing and quality metrics."""
         
         # Check if we should unfreeze layers
         self.maybe_unfreeze_layers(self.current_epoch)
         
         self.model.train()
         epoch_losses = {'total': 0, 'reconstruction': 0, 'kl': 0, 'perceptual': 0}
+        self.metrics_tracker.reset()
         
         pbar = tqdm(self.train_loader, desc=f'Epoch {self.current_epoch}')
         for batch_idx, batch in enumerate(pbar):
@@ -152,25 +319,32 @@ class Trainer:
             
             self.optimizer.step()
             
-            # Update metrics
+            # Update loss metrics
             for key in epoch_losses:
                 if key in losses:
                     epoch_losses[key] += losses[key].item()
+            
+            # Update quality metrics
+            self.metrics_tracker.update(outputs['reconstruction'], image, mask)
+            batch_metrics = self.compute_batch_metrics(outputs['reconstruction'], image, mask)
             
             # Update progress bar
             pbar.set_postfix({
                 'loss': losses['total'].item(),
                 'rec': losses['reconstruction'].item(),
-                'kl': losses['kl'].item()
+                'psnr': batch_metrics['psnr'],
+                'ssim': batch_metrics['ssim']
             })
             
-            # Logging
+            # Logging at batch level (uses global_step)
             if self.global_step % self.config.logging.log_interval == 0:
-                self.log_metrics(losses, 'train')
+                # Merge losses and metrics for logging
+                all_metrics = {**losses, **batch_metrics}
+                self.log_metrics(all_metrics, 'train_batch', step=self.global_step)
             
             # Sample generation
             if self.global_step % self.config.logging.sample_interval == 0:
-                self.generate_samples(batch, outputs)
+                self.generate_samples(batch, outputs, mask)
             
             self.global_step += 1
         
@@ -178,12 +352,17 @@ class Trainer:
         for key in epoch_losses:
             epoch_losses[key] /= len(self.train_loader)
         
+        # Add averaged quality metrics
+        quality_metrics = self.metrics_tracker.compute()
+        epoch_losses.update(quality_metrics)
+        
         return epoch_losses
     
     def validate(self) -> Dict[str, float]:
-        """Validate the model."""
+        """Validate the model with quality metrics."""
         self.model.eval()
         val_losses = {'total': 0, 'reconstruction': 0, 'kl': 0, 'perceptual': 0}
+        self.metrics_tracker.reset()
         
         with torch.no_grad():
             for batch in tqdm(self.val_loader, desc='Validation'):
@@ -209,24 +388,32 @@ class Trainer:
                     mask
                 )
                 
-                # Update metrics
+                # Update loss metrics
                 for key in val_losses:
                     if key in losses:
                         val_losses[key] += losses[key].item()
+                
+                # Update quality metrics
+                self.metrics_tracker.update(outputs['reconstruction'], image, mask)
         
         # Average losses
         for key in val_losses:
             val_losses[key] /= len(self.val_loader)
         
+        # Add averaged quality metrics
+        quality_metrics = self.metrics_tracker.compute()
+        val_losses.update(quality_metrics)
+        
         return val_losses
     
     def test_model(self) -> Dict[str, float]:
-        """Evaluate on test set during training."""
+        """Evaluate on test set during training with quality metrics."""
         if self.test_loader is None:
             return {}
         
         self.model.eval()
         test_losses = {'total': 0, 'reconstruction': 0, 'kl': 0, 'perceptual': 0}
+        self.metrics_tracker.reset()
         
         with torch.no_grad():
             for batch in tqdm(self.test_loader, desc='Testing'):
@@ -251,15 +438,78 @@ class Trainer:
                 for key in test_losses:
                     if key in losses:
                         test_losses[key] += losses[key].item()
+                
+                # Update quality metrics
+                self.metrics_tracker.update(outputs['reconstruction'], image, mask)
         
         # Average losses
         for key in test_losses:
             test_losses[key] /= len(self.test_loader)
         
+        # Add averaged quality metrics
+        quality_metrics = self.metrics_tracker.compute()
+        test_losses.update(quality_metrics)
+        
         return test_losses
     
+    def save_metrics_to_csv(
+        self,
+        epoch: int,
+        train_metrics: Dict[str, float],
+        val_metrics: Dict[str, float],
+        test_metrics: Optional[Dict[str, float]] = None,
+        learning_rate: float = None
+    ):
+        """Save epoch metrics to CSV file.
+        
+        Args:
+            epoch: Current epoch number
+            train_metrics: Dictionary of training metrics
+            val_metrics: Dictionary of validation metrics
+            test_metrics: Optional dictionary of test metrics
+            learning_rate: Current learning rate
+        """
+        # Build row data
+        row_data = {'epoch': epoch}
+        
+        # Add learning rate
+        if learning_rate is not None:
+            row_data['learning_rate'] = learning_rate
+        
+        # Add train metrics with prefix
+        for key, value in train_metrics.items():
+            if torch.is_tensor(value):
+                value = value.item()
+            row_data[f'train_{key}'] = value
+        
+        # Add val metrics with prefix
+        for key, value in val_metrics.items():
+            if torch.is_tensor(value):
+                value = value.item()
+            row_data[f'val_{key}'] = value
+        
+        # Add test metrics with prefix (if provided)
+        if test_metrics is not None:
+            for key, value in test_metrics.items():
+                if torch.is_tensor(value):
+                    value = value.item()
+                row_data[f'test_{key}'] = value
+        
+        # Write to CSV
+        file_exists = os.path.exists(self.metrics_csv_path)
+        
+        with open(self.metrics_csv_path, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=row_data.keys())
+            
+            # Write header only if file is new or empty
+            if not file_exists or not self.csv_initialized:
+                writer.writeheader()
+                self.csv_initialized = True
+            
+            writer.writerow(row_data)
+    
     def train(self):
-        """Main training loop with periodic test evaluation."""
+        """Main training loop with periodic test evaluation and quality metrics."""
         for epoch in range(self.config.training.epochs):
             self.current_epoch = epoch
             
@@ -269,33 +519,69 @@ class Trainer:
             # Validate
             val_losses = self.validate()
             
+            # Log epoch-level metrics (indexed by epoch number)
+            self.log_metrics(train_losses, 'train_epoch', step=epoch)
+            self.log_metrics(val_losses, 'val_epoch', step=epoch)
+            
             # Test every N epochs
+            test_losses = None
             if epoch % 10 == 0 and self.test_loader is not None:
                 test_losses = self.test_model()
-                print(f"Test Loss: {test_losses['total']:.4f}")
-                self.log_metrics(test_losses, 'test_epoch')
+                print(f"Test Loss: {test_losses['total']:.4f} | "
+                      f"PSNR: {test_losses['psnr']:.2f} | SSIM: {test_losses['ssim']:.4f}")
+                self.log_metrics(test_losses, 'test_epoch', step=epoch)
             
             # Learning rate scheduling
             self.scheduler.step()
             
+            # Log learning rate
+            current_lr = self.scheduler.get_last_lr()[0]
+            self.log_metrics({'learning_rate': current_lr}, 'train_epoch', step=epoch)
+            
+            # Save metrics to CSV
+            self.save_metrics_to_csv(
+                epoch=epoch,
+                train_metrics=train_losses,
+                val_metrics=val_losses,
+                test_metrics=test_losses,
+                learning_rate=current_lr
+            )
+            
             # Logging
             print(f"\nEpoch {epoch}/{self.config.training.epochs}")
-            print(f"Train Loss: {train_losses['total']:.4f}")
-            print(f"Val Loss: {val_losses['total']:.4f}")
-            
-            self.log_metrics(train_losses, 'train_epoch')
-            self.log_metrics(val_losses, 'val_epoch')
+            print(f"Train Loss: {train_losses['total']:.4f} | "
+                  f"MSE: {train_losses['mse']:.4f} | MAE: {train_losses['mae']:.4f} | "
+                  f"PSNR: {train_losses['psnr']:.2f} | SSIM: {train_losses['ssim']:.4f}")
+            print(f"Val Loss: {val_losses['total']:.4f} | "
+                  f"MSE: {val_losses['mse']:.4f} | MAE: {val_losses['mae']:.4f} | "
+                  f"PSNR: {val_losses['psnr']:.2f} | SSIM: {val_losses['ssim']:.4f}")
             
             # Save checkpoint
             if epoch % self.config.logging.save_interval == 0:
                 self.save_checkpoint(epoch, val_losses['total'])
             
-            # Save best model
+            # Save best model (based on loss)
             if val_losses['total'] < self.best_val_loss:
                 self.best_val_loss = val_losses['total']
-                self.save_checkpoint(epoch, val_losses['total'], is_best=True)
+                self.save_checkpoint(epoch, val_losses['total'], is_best=True, suffix='best_loss')
+            
+            # Save best model based on PSNR
+            if val_losses['psnr'] > self.best_val_psnr:
+                self.best_val_psnr = val_losses['psnr']
+                self.save_checkpoint(epoch, val_losses['total'], is_best=True, suffix='best_psnr')
+            
+            # Save best model based on SSIM
+            if val_losses['ssim'] > self.best_val_ssim:
+                self.best_val_ssim = val_losses['ssim']
+                self.save_checkpoint(epoch, val_losses['total'], is_best=True, suffix='best_ssim')
     
-    def save_checkpoint(self, epoch: int, val_loss: float, is_best: bool = False):
+    def save_checkpoint(
+        self, 
+        epoch: int, 
+        val_loss: float, 
+        is_best: bool = False,
+        suffix: str = 'best_model'
+    ):
         """Save model checkpoint."""
         checkpoint = {
             'epoch': epoch,
@@ -304,12 +590,14 @@ class Trainer:
             'scheduler_state_dict': self.scheduler.state_dict(),
             'val_loss': val_loss,
             'best_val_loss': self.best_val_loss,
+            'best_val_psnr': self.best_val_psnr,
+            'best_val_ssim': self.best_val_ssim,
             'config': self.config,
             'global_step': self.global_step
         }
         
         if is_best:
-            path = os.path.join(self.checkpoint_dir, 'best_model.pt')
+            path = os.path.join(self.checkpoint_dir, f'{suffix}.pt')
         else:
             path = os.path.join(self.checkpoint_dir, f'checkpoint_epoch_{epoch}.pt')
         
@@ -326,12 +614,23 @@ class Trainer:
         self.current_epoch = checkpoint['epoch']
         self.global_step = checkpoint.get('global_step', 0)
         self.best_val_loss = checkpoint.get('best_val_loss', float('inf'))
+        self.best_val_psnr = checkpoint.get('best_val_psnr', 0.0)
+        self.best_val_ssim = checkpoint.get('best_val_ssim', 0.0)
         
         print(f"Loaded checkpoint from epoch {self.current_epoch}")
         return checkpoint
     
-    def log_metrics(self, metrics: Dict[str, float], prefix: str):
-        """Log metrics to wandb and tensorboard."""
+    def log_metrics(self, metrics: Dict[str, float], prefix: str, step: int = None):
+        """Log metrics to wandb and tensorboard.
+        
+        Args:
+            metrics: Dictionary of metric names and values
+            prefix: Prefix for metric names (e.g., 'train_epoch', 'val_epoch')
+            step: Step number for logging. If None, uses global_step.
+        """
+        # Use provided step or default to global_step
+        log_step = step if step is not None else self.global_step
+        
         # Handle both tensor and float values
         processed_metrics = {}
         for key, value in metrics.items():
@@ -341,50 +640,67 @@ class Trainer:
                 processed_metrics[key] = value
         
         if self.config.logging.use_wandb:
-            wandb.log({f"{prefix}/{k}": v for k, v in processed_metrics.items()}, step=self.global_step)
+            wandb.log({f"{prefix}/{k}": v for k, v in processed_metrics.items()}, step=log_step)
         
         if self.writer is not None:
             for key, value in processed_metrics.items():
-                self.writer.add_scalar(f"{prefix}/{key}", value, self.global_step)
+                self.writer.add_scalar(f"{prefix}/{key}", value, log_step)
     
-    def generate_samples(self, batch: Dict[str, torch.Tensor], outputs: Dict[str, torch.Tensor]):
-        """Generate and log sample images."""
+    def generate_samples(
+        self, 
+        batch: Dict[str, torch.Tensor], 
+        outputs: Dict[str, torch.Tensor],
+        mask: torch.Tensor
+    ):
+        """Generate sample reconstructions for visualization.
+        
+        Args:
+            batch: Dictionary containing 'image' tensor
+            outputs: Dictionary containing 'reconstruction' tensor
+            mask: The actual mask used during training (B, 1, H, W)
+        """
         import torchvision.utils as vutils
         
         # Create grid of images
         n_samples = min(8, batch['image'].shape[0])
 
-        # Prepare masked images for visualization (compute if not provided)
-        imgs = batch['image'][:n_samples]
-        try:
-            B, C, H, W = imgs.shape
-            vis_mask = self.train_mask_gen.generate((B, 1, H, W)).to(imgs.device)
-            vis_masked = imgs * (1.0 - vis_mask)
-        except Exception:
-            vis_masked = imgs  # fallback if shape unexpected
+        # Get original images and move to device
+        imgs = batch['image'][:n_samples].to(self.device)
+        
+        # Use the actual mask from training (not a new random one)
+        vis_mask = mask[:n_samples].to(self.device)
+        vis_masked = imgs * (1.0 - vis_mask)
 
-        # Denormalize images for visualization
-        def denormalize(x):
-            return x  # Images are already in [-1, 1] range
+        # Get reconstructions and ensure they're on the same device
+        recon = outputs['reconstruction'][:n_samples].to(self.device)
 
         comparison = torch.cat([
-            denormalize(imgs),
-            denormalize(vis_masked),
-            denormalize(outputs['reconstruction'][:n_samples])
+            imgs,
+            vis_masked,
+            recon
         ], dim=0)
         
         grid = vutils.make_grid(comparison, nrow=n_samples, normalize=True, value_range=(-1, 1))
         
+        # Compute metrics for these samples
+        sample_metrics = self.compute_batch_metrics(recon, imgs)
+        
         if self.config.logging.use_wandb:
-            wandb.log({"samples": wandb.Image(grid)}, step=self.global_step)
+            wandb.log({
+                "samples": wandb.Image(grid),
+                "sample_psnr": sample_metrics['psnr'],
+                "sample_ssim": sample_metrics['ssim']
+            }, step=self.global_step)
         
         if self.writer is not None:
             self.writer.add_image("samples", grid, self.global_step)
+            self.writer.add_scalar("sample_metrics/psnr", sample_metrics['psnr'], self.global_step)
+            self.writer.add_scalar("sample_metrics/ssim", sample_metrics['ssim'], self.global_step)
         
         # Save to file periodically
         if self.global_step % (self.config.logging.sample_interval * 10) == 0:
-            os.makedirs('results/samples', exist_ok=True)
-            save_path = f'results/samples/step_{self.global_step}.png'
+            os.makedirs('/content/drive/MyDrive/vae_results/samples', exist_ok=True)
+            save_path = f'/content/drive/MyDrive/vae_results/samples/step_{self.global_step}.png'
             vutils.save_image(grid, save_path)
     
     def close(self):
