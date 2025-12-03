@@ -173,7 +173,13 @@ class CelebAInpainting(Dataset):
 
         # Return original image - flow matching will handle the masking
         # by interpolating masked regions with noise
-        return {"image": image, "mask": mask}
+        return {
+            "image": image,
+            "mask": mask,
+            "filename": filename,
+            "global_idx": sample["idx"],
+            "local_idx": idx,
+        }
 
     def get_dataloader(
         self,

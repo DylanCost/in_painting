@@ -7,7 +7,7 @@ in separate config files (e.g., vae_config.py).
 
 from dataclasses import dataclass, field
 from copy import deepcopy
-from typing import List
+from typing import Dict, List, Optional, Sequence
 
 
 @dataclass
@@ -58,6 +58,64 @@ class LoggingConfig:
     sample_interval: int = 500
     checkpoint_dir: str = "./weights"
     log_dir: str = "./logs"
+
+
+@dataclass(frozen=True)
+class ManualMaskSpec:
+    """Fixed rectangular mask definition bound to a dataset index."""
+
+    index: int
+    top: int
+    left: int
+    height: int
+    width: int
+
+    @property
+    def bottom(self) -> int:
+        return self.top + self.height
+
+    @property
+    def right(self) -> int:
+        return self.left + self.width
+
+    def as_dict(self) -> Dict[str, int]:
+        return {
+            "index": self.index,
+            "top": self.top,
+            "left": self.left,
+            "height": self.height,
+            "width": self.width,
+        }
+
+
+TRIPTYCH_MASK_VERSION = "v1"
+
+DEFAULT_TRIPTYCH_MASKS: Dict[int, ManualMaskSpec] = {
+    0: ManualMaskSpec(index=0, top=28, left=20, height=56, width=64),
+    1: ManualMaskSpec(index=1, top=48, left=32, height=56, width=56),
+    2: ManualMaskSpec(index=2, top=18, left=56, height=46, width=54),
+    3: ManualMaskSpec(index=3, top=10, left=24, height=60, width=60),
+    4: ManualMaskSpec(index=4, top=44, left=8, height=68, width=52),
+    5: ManualMaskSpec(index=5, top=30, left=72, height=54, width=44),
+    6: ManualMaskSpec(index=6, top=12, left=36, height=64, width=42),
+    7: ManualMaskSpec(index=7, top=58, left=48, height=54, width=60),
+}
+
+
+def get_triptych_mask_specs(indices: Optional[Sequence[int]] = None) -> List[ManualMaskSpec]:
+    """Return manual mask specs filtered by dataset indices (defaults to all)."""
+
+    if indices is None:
+        indices = sorted(DEFAULT_TRIPTYCH_MASKS.keys())
+
+    specs: List[ManualMaskSpec] = []
+    for idx in indices:
+        if idx not in DEFAULT_TRIPTYCH_MASKS:
+            raise KeyError(
+                f"No manual mask specification found for dataset index {idx}."
+            )
+        specs.append(DEFAULT_TRIPTYCH_MASKS[idx])
+    return specs
 
 
 @dataclass
