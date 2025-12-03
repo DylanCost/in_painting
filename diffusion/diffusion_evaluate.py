@@ -124,8 +124,8 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     # os.makedirs(out_dir, exist_ok=True)
 
     for batch_idx, batch in enumerate(tqdm(test_loader, desc="Evaluating")):
-        # if batch_idx > 2:
-        #     break
+        if batch_idx > 2:
+            break
         images = batch['image'].to(device)
         filenames = batch['filename']
         

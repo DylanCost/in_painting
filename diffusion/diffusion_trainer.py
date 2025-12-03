@@ -47,7 +47,7 @@ class DiffusionTrainer:
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer,
             T_max=config.data.epochs,
-            eta_min=1e-6
+            eta_min=1e-6 #1e-6
         )
 
         # Training parameters
@@ -91,7 +91,7 @@ class DiffusionTrainer:
             # So loss_fn might need adjustment depending on implementation
             
             # Backpropagation
-            self.optimizer.zero_grad(set_to_none=True)  # ✓ Clear gradients
+            self.optimizer.zero_grad()  # ✓ Clear gradients
             loss.backward()                              # ✓ Compute gradients
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             # ✓ Clip gradients to prevent explosion
