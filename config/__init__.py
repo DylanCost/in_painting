@@ -15,6 +15,9 @@ from config.common_config import (
     DataConfig,
     MaskConfig,
     LoggingConfig,
+    ManualMaskSpec,
+    get_triptych_mask_specs,
+    TRIPTYCH_MASK_VERSION,
 )
 
 # Pre-instantiated default configuration
@@ -29,6 +32,9 @@ __all__ = [
     "DataConfig",
     "MaskConfig",
     "LoggingConfig",
+    "ManualMaskSpec",
+    "get_triptych_mask_specs",
+    "TRIPTYCH_MASK_VERSION",
     "VAEConfig",
     "VAEModelConfig",
     "VAETrainingConfig",
