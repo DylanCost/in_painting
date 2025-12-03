@@ -98,12 +98,12 @@ class VAEConfig:
     def get_pretrained() -> "VAEConfig":
         """Get configuration for training with pretrained weights."""
         config = VAEConfig.get_default()
-        
+
         # Model settings for pretrained
         config.model.pretrained_encoder = "resnet"
         config.model.encoder_checkpoint = None
         config.model.freeze_encoder_stages = 2
-        
+
         # Modified training settings for transfer learning
         config.training.learning_rate = 0.0001
         config.training.encoder_lr = 0.00001

@@ -1,245 +1,135 @@
 """Building blocks for U-Net architecture.
 
 This module contains reusable components for the U-Net model including
-convolutional blocks, downsampling, and upsampling.
+encoder/decoder blocks and self-attention mechanisms, adapted from
+diffusion model architecture.
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
 
 
-class DoubleConv(nn.Module):
-    """Double convolution block with GroupNorm and SiLU activation.
-    
-    Applies two consecutive convolution operations with normalization
-    and activation. Includes optional time embedding conditioning.
+class EncoderBlock(nn.Module):
+    """
+    Encoder block with double convolution and time embedding injection.
     
     Architecture:
-        Conv2d -> GroupNorm -> SiLU -> Conv2d -> GroupNorm -> SiLU
-        + Time embedding injection (if provided)
-        + Residual connection (if in_channels == out_channels)
+        Conv(stride=2) -> BN -> GELU -> Conv -> BN -> GELU
+        + Time embedding injection
     
     Args:
         in_channels: Number of input channels
         out_channels: Number of output channels
-        time_embed_dim: Dimension of time embedding (optional)
-        num_groups: Number of groups for GroupNorm (default: 8)
-        residual: Whether to use residual connection (default: True)
-    
-    Input:
-        x: Input tensor of shape [B, in_channels, H, W]
-        time_emb: Optional time embedding of shape [B, time_embed_dim]
-    
-    Output:
-        Output tensor of shape [B, out_channels, H, W]
+        time_emb_dim: Dimension of time embedding
     """
-    
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        time_embed_dim: Optional[int] = None,
-        num_groups: int = 8,
-        residual: bool = True
-    ):
+    def __init__(self, in_channels: int, out_channels: int, time_emb_dim: int):
         super().__init__()
         
-        self.residual = residual and (in_channels == out_channels)
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 4, stride=2, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU()
+        )
         
-        # First convolution block
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
-        self.norm1 = nn.GroupNorm(num_groups, out_channels)
-        self.act1 = nn.SiLU()
+        # Time projection
+        self.time_proj = nn.Linear(time_emb_dim, out_channels)
         
-        # Second convolution block
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
-        self.norm2 = nn.GroupNorm(num_groups, out_channels)
-        self.act2 = nn.SiLU()
-        
-        # Time embedding projection
-        if time_embed_dim is not None:
-            self.time_mlp = nn.Sequential(
-                nn.SiLU(),
-                nn.Linear(time_embed_dim, out_channels)
-            )
-        else:
-            self.time_mlp = None
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(out_channels, out_channels, 3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.GELU()
+        )
     
-    def forward(self, x: torch.Tensor, time_emb: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """Forward pass through double convolution block.
-        
-        Args:
-            x: Input tensor of shape [B, in_channels, H, W]
-            time_emb: Optional time embedding of shape [B, time_embed_dim]
-            
-        Returns:
-            Output tensor of shape [B, out_channels, H, W]
+    def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> torch.Tensor:
         """
-        identity = x if self.residual else None
-        
-        # First convolution
-        h = self.conv1(x)
-        h = self.norm1(h)
-        h = self.act1(h)
-        
-        # Add time embedding if provided
-        if time_emb is not None and self.time_mlp is not None:
-            time_emb = self.time_mlp(time_emb)
-            # Reshape to [B, C, 1, 1] for broadcasting
-            h = h + time_emb[:, :, None, None]
-        
-        # Second convolution
-        h = self.conv2(h)
-        h = self.norm2(h)
-        
-        # Add residual connection
-        if self.residual:
-            h = h + identity
-        
-        h = self.act2(h)
-        
-        return h
+        Args:
+            x: Input tensor [B, in_channels, H, W]
+            t_emb: Time embedding [B, time_emb_dim]
+        """
+        x = self.conv1(x)
+        # Add time embedding
+        x = x + self.time_proj(t_emb)[:, :, None, None]
+        x = self.conv2(x)
+        return x
 
 
-class Down(nn.Module):
-    """Downsampling block with double convolution.
+class DecoderBlock(nn.Module):
+    """
+    Decoder block with transposed convolution and time embedding injection.
     
-    Performs spatial downsampling followed by double convolution.
-    Uses MaxPool2d for downsampling.
+    Architecture:
+        ConvTranspose(stride=2) -> BN -> ReLU -> Conv -> BN -> ReLU
+        + Time embedding injection
     
     Args:
         in_channels: Number of input channels
         out_channels: Number of output channels
-        time_embed_dim: Dimension of time embedding (optional)
-        num_groups: Number of groups for GroupNorm (default: 8)
-    
-    Input:
-        x: Input tensor of shape [B, in_channels, H, W]
-        time_emb: Optional time embedding of shape [B, time_embed_dim]
-    
-    Output:
-        Output tensor of shape [B, out_channels, H/2, W/2]
+        time_emb_dim: Dimension of time embedding
     """
-    
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        time_embed_dim: Optional[int] = None,
-        num_groups: int = 8
-    ):
+    def __init__(self, in_channels: int, out_channels: int, time_emb_dim: int):
         super().__init__()
         
-        self.maxpool = nn.MaxPool2d(2)
-        self.conv = DoubleConv(
-            in_channels,
-            out_channels,
-            time_embed_dim=time_embed_dim,
-            num_groups=num_groups,
-            residual=False
+        self.conv1 = nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, 4, stride=2, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+        
+        # Time projection
+        self.time_proj = nn.Linear(time_emb_dim, out_channels)
+        
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(out_channels, out_channels, 3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
         )
     
-    def forward(self, x: torch.Tensor, time_emb: Optional[torch.Tensor] = None) -> torch.Tensor:
-        """Forward pass through downsampling block.
-        
-        Args:
-            x: Input tensor of shape [B, in_channels, H, W]
-            time_emb: Optional time embedding of shape [B, time_embed_dim]
-            
-        Returns:
-            Output tensor of shape [B, out_channels, H/2, W/2]
+    def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> torch.Tensor:
         """
-        x = self.maxpool(x)
-        x = self.conv(x, time_emb)
+        Args:
+            x: Input tensor [B, in_channels, H, W]
+            t_emb: Time embedding [B, time_emb_dim]
+        """
+        x = self.conv1(x)
+        # Add time embedding
+        x = x + self.time_proj(t_emb)[:, :, None, None]
+        x = self.conv2(x)
         return x
 
 
-class Up(nn.Module):
-    """Upsampling block with skip connection and double convolution.
-    
-    Performs spatial upsampling, concatenates with skip connection from encoder,
-    and applies double convolution.
+class SelfAttention(nn.Module):
+    """
+    Self-attention module for capturing long-range dependencies.
     
     Args:
-        in_channels: Number of input channels (from previous layer)
-        skip_channels: Number of channels in skip connection
-        out_channels: Number of output channels
-        time_embed_dim: Dimension of time embedding (optional)
-        num_groups: Number of groups for GroupNorm (default: 8)
-        bilinear: Use bilinear upsampling instead of transposed conv (default: True)
-    
-    Input:
-        x: Input tensor of shape [B, in_channels, H, W]
-        skip: Skip connection tensor of shape [B, skip_channels, H*2, W*2]
-        time_emb: Optional time embedding of shape [B, time_embed_dim]
-    
-    Output:
-        Output tensor of shape [B, out_channels, H*2, W*2]
+        channels: Number of input/output channels
     """
-    
-    def __init__(
-        self,
-        in_channels: int,
-        skip_channels: int,
-        out_channels: int,
-        time_embed_dim: Optional[int] = None,
-        num_groups: int = 8,
-        bilinear: bool = True
-    ):
+    def __init__(self, channels: int):
         super().__init__()
         
-        # Upsampling
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-            self.conv_up = nn.Conv2d(in_channels, in_channels, kernel_size=1)
-        else:
-            self.up = nn.ConvTranspose2d(
-                in_channels,
-                in_channels,
-                kernel_size=2,
-                stride=2
-            )
-            self.conv_up = nn.Identity()
+        self.channels = channels
+        self.query = nn.Conv2d(channels, channels // 8, 1)
+        self.key = nn.Conv2d(channels, channels // 8, 1)
+        self.value = nn.Conv2d(channels, channels, 1)
+        self.gamma = nn.Parameter(torch.zeros(1))
         
-        # Double convolution after concatenation
-        self.conv = DoubleConv(
-            in_channels + skip_channels,
-            out_channels,
-            time_embed_dim=time_embed_dim,
-            num_groups=num_groups,
-            residual=False
-        )
-    
-    def forward(
-        self,
-        x: torch.Tensor,
-        skip: torch.Tensor,
-        time_emb: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
-        """Forward pass through upsampling block.
-        
-        Args:
-            x: Input tensor of shape [B, in_channels, H, W]
-            skip: Skip connection of shape [B, skip_channels, H*2, W*2]
-            time_emb: Optional time embedding of shape [B, time_embed_dim]
-            
-        Returns:
-            Output tensor of shape [B, out_channels, H*2, W*2]
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        x = self.up(x)
-        x = self.conv_up(x)
+        Args:
+            x: Input tensor [B, C, H, W]
+        """
+        batch_size, channels, height, width = x.shape
         
-        # Handle potential size mismatch due to odd dimensions
-        if x.shape[-2:] != skip.shape[-2:]:
-            x = F.interpolate(x, size=skip.shape[-2:], mode='bilinear', align_corners=True)
+        # Generate query, key, value
+        q = self.query(x).view(batch_size, -1, height * width).permute(0, 2, 1)
+        k = self.key(x).view(batch_size, -1, height * width)
+        v = self.value(x).view(batch_size, -1, height * width)
         
-        # Concatenate with skip connection
-        x = torch.cat([x, skip], dim=1)
+        # Attention
+        attention = F.softmax(torch.bmm(q, k), dim=-1)
+        out = torch.bmm(v, attention.permute(0, 2, 1))
+        out = out.view(batch_size, channels, height, width)
         
-        # Apply double convolution
-        x = self.conv(x, time_emb)
-        
-        return x
-
+        # Residual connection with learnable weight
+        return x + self.gamma * out

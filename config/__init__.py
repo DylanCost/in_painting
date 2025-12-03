@@ -9,6 +9,17 @@ from config.vae_config import (
     VAELoggingConfig,
 )
 
+from config.common_config import (
+    Config,
+    UNetConfig,
+    DataConfig,
+    MaskConfig,
+    LoggingConfig,
+    ManualMaskSpec,
+    get_triptych_mask_specs,
+    TRIPTYCH_MASK_VERSION,
+)
+
 # Pre-instantiated default configuration
 default_config = VAEConfig.get_default()
 
@@ -16,6 +27,14 @@ default_config = VAEConfig.get_default()
 pretrained_config = VAEConfig.get_pretrained()
 
 __all__ = [
+    "Config",
+    "UNetConfig",
+    "DataConfig",
+    "MaskConfig",
+    "LoggingConfig",
+    "ManualMaskSpec",
+    "get_triptych_mask_specs",
+    "TRIPTYCH_MASK_VERSION",
     "VAEConfig",
     "VAEModelConfig",
     "VAETrainingConfig",

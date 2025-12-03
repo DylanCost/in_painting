@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from typing import Tuple
+from typing import Optional, Tuple
 from scipy import linalg
 from torch.nn.functional import adaptive_avg_pool2d
 from torchvision.models import inception_v3
@@ -14,21 +14,36 @@ class InpaintingMetrics:
         self.device = device
         
         # LPIPS for perceptual distance
-        self.lpips = lpips.LPIPS(net='alex').to(device)
+        self.lpips = None
         
         # Inception model for FID
-        self.inception = inception_v3(pretrained=True, transform_input=False).to(device)
-        self.inception.eval()
+        # self.inception = inception_v3(pretrained=True, transform_input=False).to(device)
+        # self.inception.eval()
     
-    def psnr(self, pred: torch.Tensor, target: torch.Tensor) -> float:
+    def psnr(self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> float:
         """Calculate Peak Signal-to-Noise Ratio."""
-        mse = torch.mean((pred - target) ** 2)
-        if mse == 0:
-            return float('inf')
-        return 20 * torch.log10(2.0 / torch.sqrt(mse)).item()
+
+        me = ((pred-target) ** 2) * mask
+        total_mask_pixels = mask.sum() * pred.shape[1]
+        mse = me.sum() / total_mask_pixels
     
-    def ssim(self, pred: torch.Tensor, target: torch.Tensor) -> float:
-        """Calculate Structural Similarity Index."""
+        maximum = 2
+        psnr = 10 * torch.log10(maximum**2 / mse).item()
+        return psnr
+    
+    def ssim(
+        self,
+        pred: torch.Tensor,
+        target: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+    ) -> float:
+        """Calculate Structural Similarity Index.
+        
+        Args:
+            pred: Predicted tensor in [B, C, H, W] format.
+            target: Target tensor in [B, C, H, W] format.
+            mask: Optional binary mask; currently unused but kept for API parity.
+        """
         from skimage.metrics import structural_similarity
         
         pred_np = pred.cpu().numpy().transpose(0, 2, 3, 1)
@@ -36,13 +51,15 @@ class InpaintingMetrics:
         
         ssim_values = []
         for p, t in zip(pred_np, target_np):
-            ssim_val = structural_similarity(p, t, multichannel=True, data_range=2.0)
+            ssim_val = structural_similarity(p, t, channel_axis=-1, data_range=2.0)
             ssim_values.append(ssim_val)
         
         return np.mean(ssim_values)
     
     def lpips_distance(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         """Calculate LPIPS perceptual distance."""
+        if self.lpips is None:
+            self.lpips = lpips.LPIPS(net='alex').to(self.device)
         with torch.no_grad():
             distance = self.lpips(pred, target)
         return distance.mean().item()
