@@ -154,13 +154,13 @@ class DiffusionTrainer:
             # Denoise using DDPM sampling
             inpainted = sample_ddpm(self.model, self.noise_scheduler, noisy_images, masks, num_timesteps=1000)
             
-            # Compute all metrics on full images
+            # Compute all metrics on masked portions of image
             psnr_val = metrics_calc.psnr(inpainted, images, masks)
             ssim_val = metrics_calc.ssim(inpainted, images, masks)
+            mae_val = metrics_calc.compute_mae(inpainted, images, masks)
             
             # Compute MSE and MAE
             mse_val = torch.mean((inpainted - images) ** 2).item()
-            mae_val = torch.mean(torch.abs(inpainted - images)).item()
             
             all_psnr.append(psnr_val)
             all_ssim.append(ssim_val)

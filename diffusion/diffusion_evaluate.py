@@ -119,8 +119,8 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     print("\nStarting evaluation...")
 
     for batch_idx, batch in enumerate(tqdm(test_loader, desc="Evaluating")):
-        # if batch_idx > 2:
-        #     break
+        if batch_idx > 2:
+            break
         images = batch['image'].to(device)
         filenames = batch['filename']
         
@@ -143,10 +143,10 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
         # Compute all metrics on full images
         psnr_val = metrics_calc.psnr(inpainted, images, masks)
         ssim_val = metrics_calc.ssim(inpainted, images, masks)
+        mae_val = metrics_calc.compute_mae(inpainted, images, masks)
         
         # Compute MSE and MAE
         mse_val = torch.mean((inpainted - images) ** 2).item()
-        mae_val = torch.mean(torch.abs(inpainted - images)).item()
         
         all_psnr.append(psnr_val)
         all_ssim.append(ssim_val)

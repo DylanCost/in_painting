@@ -88,6 +88,7 @@ class InpaintingMetrics:
         return float(np.mean(ssim_values))
     
     def compute_mae(
+        self,
         pred: torch.Tensor,
         target: torch.Tensor,
         mask: Optional[torch.Tensor] = None,
