@@ -87,6 +87,45 @@ class InpaintingMetrics:
         
         return float(np.mean(ssim_values))
     
+    def compute_mae(
+        pred: torch.Tensor,
+        target: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+    ) -> float:
+        """Compute Mean Absolute Error (MAE).
+
+        MAE measures the average absolute difference between prediction and target.
+        Lower values indicate better reconstruction quality.
+
+        Args:
+            pred: Predicted image, shape [B, C, H, W] or [C, H, W]
+            target: Ground truth image, same shape as pred
+            mask: Optional binary mask (1 = compute metric, 0 = ignore),
+                shape [B, 1, H, W] or [1, H, W]. If None, computes on full image.
+
+        Returns:
+            MAE value as a float.
+        """
+        # Ensure tensors are on the same device
+        if pred.device != target.device:
+            target = target.to(pred.device)
+
+        abs_error = torch.abs(pred - target)
+
+        if mask is not None:
+            if mask.device != pred.device:
+                mask = mask.to(pred.device)
+
+            # Expand mask to match image channels if needed
+            if mask.shape[1] == 1 and pred.shape[1] > 1:
+                mask = mask.expand_as(pred)
+
+            mae = (abs_error * mask).sum() / (mask.sum() + 1e-8)
+        else:
+            mae = abs_error.mean()
+
+        return mae.item()
+    
     def lpips_distance(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         """Calculate LPIPS perceptual distance."""
         if self.lpips is None:

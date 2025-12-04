@@ -133,7 +133,7 @@ class DiffusionTrainer:
         all_mae = []
 
         for batch_idx, batch in enumerate(self.val_loader):
-            if batch_idx > 10:
+            if batch_idx > 16:
                 break
             images = batch['image'].to(self.device)
             filenames = batch['filename']
@@ -156,7 +156,7 @@ class DiffusionTrainer:
             
             # Compute all metrics on full images
             psnr_val = metrics_calc.psnr(inpainted, images, masks)
-            ssim_val = metrics_calc.ssim(inpainted, images)
+            ssim_val = metrics_calc.ssim(inpainted, images, masks)
             
             # Compute MSE and MAE
             mse_val = torch.mean((inpainted - images) ** 2).item()

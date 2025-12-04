@@ -38,9 +38,6 @@ def sample_ddpm(model, scheduler, x_t, mask, num_timesteps=None):
     B = x_t.size(0)
     T = scheduler.num_timesteps if num_timesteps is None else num_timesteps
 
-    save_dir = "./runs/eval_debug"
-    os.makedirs(save_dir, exist_ok=True)
-
     # make a copy to avoid overwriting the input tensor
     mask_3c = mask.repeat(1, x_t.size(1), 1, 1)
     x_t = x_t.clone()
@@ -120,12 +117,10 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     all_mae = []
     
     print("\nStarting evaluation...")
-    #out_dir = "./runs/eval_debug"
-    # os.makedirs(out_dir, exist_ok=True)
 
     for batch_idx, batch in enumerate(tqdm(test_loader, desc="Evaluating")):
-        if batch_idx > 2:
-            break
+        # if batch_idx > 2:
+        #     break
         images = batch['image'].to(device)
         filenames = batch['filename']
         
@@ -147,7 +142,7 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
         
         # Compute all metrics on full images
         psnr_val = metrics_calc.psnr(inpainted, images, masks)
-        ssim_val = metrics_calc.ssim(inpainted, images)
+        ssim_val = metrics_calc.ssim(inpainted, images, masks)
         
         # Compute MSE and MAE
         mse_val = torch.mean((inpainted - images) ** 2).item()
