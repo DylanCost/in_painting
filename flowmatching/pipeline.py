@@ -53,9 +53,9 @@ class FlowMatchingConfig:
     epochs: int = 100
     batch_size: int = 32
     learning_rate: float = 1e-4
-    weight_decay: float = 1e-2
+    weight_decay: float = 0.0
     warmup_steps: int = 1000
-    min_lr: float = 1e-6
+    min_lr: float = 1e-5
     subsample_fraction: float = 1.0  # Fraction of training data to use (for debugging)
 
     # Sampling parameters
