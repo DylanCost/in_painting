@@ -11,57 +11,44 @@ import math
 from typing import Dict, Optional
 from torch.utils.tensorboard import SummaryWriter
 from masking.mask_generator import MaskGenerator
-import torchvision.utils as vutils
 
 
-def compute_psnr(pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor, data_range: float = 2.0) -> torch.Tensor:
+def compute_psnr(pred: torch.Tensor, target: torch.Tensor, data_range: float = 2.0) -> torch.Tensor:
     """
-    Compute Peak Signal-to-Noise Ratio only on masked regions.
+    Compute Peak Signal-to-Noise Ratio.
     
     Args:
         pred: Predicted images (B, C, H, W) in range [-1, 1]
         target: Target images (B, C, H, W) in range [-1, 1]
-        mask: Binary mask (B, 1, H, W) where 1 indicates regions to evaluate
         data_range: The difference between max and min values (2.0 for [-1, 1] range)
     
     Returns:
-        Mean PSNR value across the batch for masked regions only
+        Mean PSNR value across the batch
     """
-    # Expand mask to match image channels if needed
-    if mask.shape[1] == 1 and pred.shape[1] > 1:
-        mask = mask.expand_as(pred)
-    
-    # Compute MSE only on masked regions
-    diff = (pred - target) * mask
-    mse_per_image = (diff ** 2).sum(dim=[1, 2, 3]) / (mask.sum(dim=[1, 2, 3]) + 1e-8)
-    
-    # Compute PSNR for each image
-    psnr = 10 * torch.log10((data_range ** 2) / (mse_per_image + 1e-8))
-    
+    mse = F.mse_loss(pred, target, reduction='none').mean(dim=[1, 2, 3])
+    psnr = 10 * torch.log10((data_range ** 2) / (mse + 1e-8))
     return psnr.mean()
 
 
 def compute_ssim(
     pred: torch.Tensor, 
-    target: torch.Tensor,
-    mask: torch.Tensor,
+    target: torch.Tensor, 
     window_size: int = 11,
     data_range: float = 2.0,
     channel: int = 3
 ) -> torch.Tensor:
     """
-    Compute Structural Similarity Index Measure only on masked regions.
+    Compute Structural Similarity Index Measure.
     
     Args:
         pred: Predicted images (B, C, H, W) in range [-1, 1]
         target: Target images (B, C, H, W) in range [-1, 1]
-        mask: Binary mask (B, 1, H, W) where 1 indicates regions to evaluate
         window_size: Size of the Gaussian window
         data_range: The difference between max and min values
         channel: Number of channels
     
     Returns:
-        Mean SSIM value across the batch for masked regions only
+        Mean SSIM value across the batch
     """
     # Create Gaussian window
     def gaussian_window(size: int, sigma: float) -> torch.Tensor:
@@ -78,49 +65,32 @@ def compute_ssim(
     _2d_window = _2d_window.expand(channel, 1, window_size, window_size).contiguous()
     window = _2d_window.to(pred.device, dtype=pred.dtype)
     
-    # Expand mask to match channels
-    if mask.shape[1] == 1:
-        mask_expanded = mask.expand(-1, channel, -1, -1)
-    else:
-        mask_expanded = mask
-    
-    # Apply mask to inputs
-    pred_masked = pred * mask_expanded
-    target_masked = target * mask_expanded
-    
     # Constants for stability
     C1 = (0.01 * data_range) ** 2
     C2 = (0.03 * data_range) ** 2
     
-    # Compute means (weighted by mask)
-    mu1 = F.conv2d(pred_masked, window, padding=window_size // 2, groups=channel)
-    mu2 = F.conv2d(target_masked, window, padding=window_size // 2, groups=channel)
-    
-    # Normalize by mask area
-    mask_sum = F.conv2d(mask_expanded, window, padding=window_size // 2, groups=channel) + 1e-8
-    mu1 = mu1 / mask_sum
-    mu2 = mu2 / mask_sum
+    # Compute means
+    mu1 = F.conv2d(pred, window, padding=window_size // 2, groups=channel)
+    mu2 = F.conv2d(target, window, padding=window_size // 2, groups=channel)
     
     mu1_sq = mu1 ** 2
     mu2_sq = mu2 ** 2
     mu1_mu2 = mu1 * mu2
     
-    # Compute variances and covariance (weighted by mask)
-    sigma1_sq = F.conv2d(pred_masked ** 2, window, padding=window_size // 2, groups=channel) / mask_sum - mu1_sq
-    sigma2_sq = F.conv2d(target_masked ** 2, window, padding=window_size // 2, groups=channel) / mask_sum - mu2_sq
-    sigma12 = F.conv2d(pred_masked * target_masked, window, padding=window_size // 2, groups=channel) / mask_sum - mu1_mu2
+    # Compute variances and covariance
+    sigma1_sq = F.conv2d(pred ** 2, window, padding=window_size // 2, groups=channel) - mu1_sq
+    sigma2_sq = F.conv2d(target ** 2, window, padding=window_size // 2, groups=channel) - mu2_sq
+    sigma12 = F.conv2d(pred * target, window, padding=window_size // 2, groups=channel) - mu1_mu2
     
     # SSIM formula
     ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / \
                ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
     
-    # Apply mask to SSIM map and compute mean only over masked regions
-    ssim_map_masked = ssim_map * mask_expanded
-    return ssim_map_masked.sum() / (mask_expanded.sum() + 1e-8)
+    return ssim_map.mean()
 
 
 class MetricsTracker:
-    """Track and compute image quality metrics for masked regions."""
+    """Track and compute image quality metrics."""
     
     def __init__(self, device: str = 'cuda'):
         self.device = device
@@ -134,39 +104,32 @@ class MetricsTracker:
         self.ssim_sum = 0.0
         self.count = 0
     
-    def update(self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor):
+    def update(self, pred: torch.Tensor, target: torch.Tensor, mask: Optional[torch.Tensor] = None):
         """
-        Update metrics with a new batch (computed only on masked regions).
+        Update metrics with a new batch.
         
         Args:
             pred: Predicted images (B, C, H, W)
             target: Target images (B, C, H, W)
-            mask: Binary mask for masked region metrics (B, 1, H, W)
+            mask: Optional mask for masked region metrics (B, 1, H, W)
         """
         batch_size = pred.shape[0]
         
         with torch.no_grad():
-            # Expand mask to match channels if needed
-            if mask.shape[1] == 1 and pred.shape[1] > 1:
-                mask_expanded = mask.expand_as(pred)
-            else:
-                mask_expanded = mask
-            
-            # MSE on masked regions
-            diff = (pred - target) * mask_expanded
-            mse = (diff ** 2).sum() / (mask_expanded.sum() + 1e-8)
+            # MSE
+            mse = F.mse_loss(pred, target, reduction='mean')
             self.mse_sum += mse.item() * batch_size
             
-            # MAE on masked regions
-            mae = (diff.abs()).sum() / (mask_expanded.sum() + 1e-8)
+            # MAE
+            mae = F.l1_loss(pred, target, reduction='mean')
             self.mae_sum += mae.item() * batch_size
             
-            # PSNR on masked regions
-            psnr = compute_psnr(pred, target, mask)
+            # PSNR
+            psnr = compute_psnr(pred, target)
             self.psnr_sum += psnr.item() * batch_size
             
-            # SSIM on masked regions
-            ssim = compute_ssim(pred, target, mask, channel=pred.shape[1])
+            # SSIM
+            ssim = compute_ssim(pred, target, channel=pred.shape[1])
             self.ssim_sum += ssim.item() * batch_size
             
             self.count += batch_size
@@ -185,7 +148,7 @@ class MetricsTracker:
 
 
 class Trainer:
-    """Enhanced trainer with pretrained model support and masked region quality metrics."""
+    """Enhanced trainer with pretrained model support and quality metrics."""
     
     def __init__(
         self,
@@ -202,7 +165,7 @@ class Trainer:
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.test_loader = test_loader
-        self.loss_fn = loss_fn.to(device)
+        self.loss_fn = loss_fn
         self.config = config
         self.mask_config = mask_config
         self.device = device
@@ -297,36 +260,24 @@ class Trainer:
         self, 
         pred: torch.Tensor, 
         target: torch.Tensor,
-        mask: torch.Tensor
+        mask: Optional[torch.Tensor] = None
     ) -> Dict[str, float]:
-        """Compute MSE, MAE, PSNR, and SSIM for masked regions in a single batch."""
+        """Compute MSE, MAE, PSNR, and SSIM for a single batch."""
         with torch.no_grad():
-            # Expand mask if needed
-            if mask.shape[1] == 1 and pred.shape[1] > 1:
-                mask_expanded = mask.expand_as(pred)
-            else:
-                mask_expanded = mask
-            
-            # MSE on masked regions
-            diff = (pred - target) * mask_expanded
-            mse = (diff ** 2).sum() / (mask_expanded.sum() + 1e-8)
-            
-            # MAE on masked regions
-            mae = diff.abs().sum() / (mask_expanded.sum() + 1e-8)
-            
-            # PSNR and SSIM on masked regions
-            psnr = compute_psnr(pred, target, mask)
-            ssim = compute_ssim(pred, target, mask, channel=pred.shape[1])
+            mse = F.mse_loss(pred, target, reduction='mean').item()
+            mae = F.l1_loss(pred, target, reduction='mean').item()
+            psnr = compute_psnr(pred, target).item()
+            ssim = compute_ssim(pred, target, channel=pred.shape[1]).item()
         
         return {
-            'mse': mse.item(),
-            'mae': mae.item(),
-            'psnr': psnr.item(),
-            'ssim': ssim.item()
+            'mse': mse,
+            'mae': mae,
+            'psnr': psnr,
+            'ssim': ssim
         }
     
     def train_epoch(self) -> Dict[str, float]:
-        """Modified train epoch with progressive unfreezing and masked region quality metrics."""
+        """Modified train epoch with progressive unfreezing and quality metrics."""
         
         # Check if we should unfreeze layers
         self.maybe_unfreeze_layers(self.current_epoch)
@@ -373,7 +324,7 @@ class Trainer:
                 if key in losses:
                     epoch_losses[key] += losses[key].item()
             
-            # Update quality metrics (for masked regions)
+            # Update quality metrics
             self.metrics_tracker.update(outputs['reconstruction'], image, mask)
             batch_metrics = self.compute_batch_metrics(outputs['reconstruction'], image, mask)
             
@@ -381,11 +332,11 @@ class Trainer:
             pbar.set_postfix({
                 'loss': losses['total'].item(),
                 'rec': losses['reconstruction'].item(),
-                'psnr_mask': batch_metrics['psnr'],
-                'ssim_mask': batch_metrics['ssim']
+                'psnr': batch_metrics['psnr'],
+                'ssim': batch_metrics['ssim']
             })
             
-            # Logging at batch level
+            # Logging at batch level (uses global_step)
             if self.global_step % self.config.logging.log_interval == 0:
                 # Merge losses and metrics for logging
                 all_metrics = {**losses, **batch_metrics}
@@ -393,7 +344,7 @@ class Trainer:
             
             # Sample generation
             if self.global_step % self.config.logging.sample_interval == 0:
-                self.generate_samples(image, outputs, masked_image, mask)
+                self.generate_samples(batch, outputs, mask)
             
             self.global_step += 1
         
@@ -401,14 +352,14 @@ class Trainer:
         for key in epoch_losses:
             epoch_losses[key] /= len(self.train_loader)
         
-        # Add averaged quality metrics (for masked regions)
+        # Add averaged quality metrics
         quality_metrics = self.metrics_tracker.compute()
         epoch_losses.update(quality_metrics)
         
         return epoch_losses
     
     def validate(self) -> Dict[str, float]:
-        """Validate the model with masked region quality metrics."""
+        """Validate the model with quality metrics."""
         self.model.eval()
         val_losses = {'total': 0, 'reconstruction': 0, 'kl': 0, 'perceptual': 0}
         self.metrics_tracker.reset()
@@ -442,21 +393,21 @@ class Trainer:
                     if key in losses:
                         val_losses[key] += losses[key].item()
                 
-                # Update quality metrics (for masked regions)
+                # Update quality metrics
                 self.metrics_tracker.update(outputs['reconstruction'], image, mask)
         
         # Average losses
         for key in val_losses:
             val_losses[key] /= len(self.val_loader)
         
-        # Add averaged quality metrics (for masked regions)
+        # Add averaged quality metrics
         quality_metrics = self.metrics_tracker.compute()
         val_losses.update(quality_metrics)
         
         return val_losses
     
     def test_model(self) -> Dict[str, float]:
-        """Evaluate on test set with masked region quality metrics."""
+        """Evaluate on test set during training with quality metrics."""
         if self.test_loader is None:
             return {}
         
@@ -488,14 +439,14 @@ class Trainer:
                     if key in losses:
                         test_losses[key] += losses[key].item()
                 
-                # Update quality metrics (for masked regions)
+                # Update quality metrics
                 self.metrics_tracker.update(outputs['reconstruction'], image, mask)
         
         # Average losses
         for key in test_losses:
             test_losses[key] /= len(self.test_loader)
         
-        # Add averaged quality metrics (for masked regions)
+        # Add averaged quality metrics
         quality_metrics = self.metrics_tracker.compute()
         test_losses.update(quality_metrics)
         
@@ -509,7 +460,15 @@ class Trainer:
         test_metrics: Optional[Dict[str, float]] = None,
         learning_rate: float = None
     ):
-        """Save epoch metrics to CSV file."""
+        """Save epoch metrics to CSV file.
+        
+        Args:
+            epoch: Current epoch number
+            train_metrics: Dictionary of training metrics
+            val_metrics: Dictionary of validation metrics
+            test_metrics: Optional dictionary of test metrics
+            learning_rate: Current learning rate
+        """
         # Build row data
         row_data = {'epoch': epoch}
         
@@ -550,7 +509,7 @@ class Trainer:
             writer.writerow(row_data)
     
     def train(self):
-        """Main training loop with masked region evaluation."""
+        """Main training loop with periodic test evaluation and quality metrics."""
         for epoch in range(self.config.training.epochs):
             self.current_epoch = epoch
             
@@ -560,7 +519,7 @@ class Trainer:
             # Validate
             val_losses = self.validate()
             
-            # Log epoch-level metrics
+            # Log epoch-level metrics (indexed by epoch number)
             self.log_metrics(train_losses, 'train_epoch', step=epoch)
             self.log_metrics(val_losses, 'val_epoch', step=epoch)
             
@@ -569,7 +528,7 @@ class Trainer:
             if epoch % 10 == 0 and self.test_loader is not None:
                 test_losses = self.test_model()
                 print(f"Test Loss: {test_losses['total']:.4f} | "
-                      f"Masked PSNR: {test_losses['psnr']:.2f} | Masked SSIM: {test_losses['ssim']:.4f}")
+                      f"PSNR: {test_losses['psnr']:.2f} | SSIM: {test_losses['ssim']:.4f}")
                 self.log_metrics(test_losses, 'test_epoch', step=epoch)
             
             # Learning rate scheduling
@@ -588,14 +547,14 @@ class Trainer:
                 learning_rate=current_lr
             )
             
-            # Logging (now showing masked region metrics)
+            # Logging
             print(f"\nEpoch {epoch}/{self.config.training.epochs}")
             print(f"Train Loss: {train_losses['total']:.4f} | "
-                  f"Masked MSE: {train_losses['mse']:.4f} | Masked MAE: {train_losses['mae']:.4f} | "
-                  f"Masked PSNR: {train_losses['psnr']:.2f} | Masked SSIM: {train_losses['ssim']:.4f}")
+                  f"MSE: {train_losses['mse']:.4f} | MAE: {train_losses['mae']:.4f} | "
+                  f"PSNR: {train_losses['psnr']:.2f} | SSIM: {train_losses['ssim']:.4f}")
             print(f"Val Loss: {val_losses['total']:.4f} | "
-                  f"Masked MSE: {val_losses['mse']:.4f} | Masked MAE: {val_losses['mae']:.4f} | "
-                  f"Masked PSNR: {val_losses['psnr']:.2f} | Masked SSIM: {val_losses['ssim']:.4f}")
+                  f"MSE: {val_losses['mse']:.4f} | MAE: {val_losses['mae']:.4f} | "
+                  f"PSNR: {val_losses['psnr']:.2f} | SSIM: {val_losses['ssim']:.4f}")
             
             # Save checkpoint
             if epoch % self.config.logging.save_interval == 0:
@@ -606,12 +565,12 @@ class Trainer:
                 self.best_val_loss = val_losses['total']
                 self.save_checkpoint(epoch, val_losses['total'], is_best=True, suffix='best_loss')
             
-            # Save best model based on masked PSNR
+            # Save best model based on PSNR
             if val_losses['psnr'] > self.best_val_psnr:
                 self.best_val_psnr = val_losses['psnr']
                 self.save_checkpoint(epoch, val_losses['total'], is_best=True, suffix='best_psnr')
             
-            # Save best model based on masked SSIM
+            # Save best model based on SSIM
             if val_losses['ssim'] > self.best_val_ssim:
                 self.best_val_ssim = val_losses['ssim']
                 self.save_checkpoint(epoch, val_losses['total'], is_best=True, suffix='best_ssim')
@@ -662,7 +621,13 @@ class Trainer:
         return checkpoint
     
     def log_metrics(self, metrics: Dict[str, float], prefix: str, step: int = None):
-        """Log metrics to wandb and tensorboard."""
+        """Log metrics to wandb and tensorboard.
+        
+        Args:
+            metrics: Dictionary of metric names and values
+            prefix: Prefix for metric names (e.g., 'train_epoch', 'val_epoch')
+            step: Step number for logging. If None, uses global_step.
+        """
         # Use provided step or default to global_step
         log_step = step if step is not None else self.global_step
         
@@ -683,57 +648,60 @@ class Trainer:
     
     def generate_samples(
         self, 
-        image: torch.Tensor,
+        batch: Dict[str, torch.Tensor], 
         outputs: Dict[str, torch.Tensor],
-        masked_image: torch.Tensor,
         mask: torch.Tensor
     ):
-        """Generate sample reconstructions for visualization with masked region metrics."""
-        with torch.no_grad():
-            # Ensure all tensors are on the same device
-            device = self.device
-            
-            # Take first 8 samples
-            n_samples = min(8, image.size(0))
-            
-            # Move all tensors to device and select samples
-            original = image[:n_samples].to(device)
-            masked = masked_image[:n_samples].to(device)
-            reconstruction = outputs['reconstruction'][:n_samples].to(device)
-            mask_viz = mask[:n_samples].repeat(1, 3, 1, 1).to(device)  # Convert to 3-channel
-            
-            # Create comparison grid with all images
-            comparison = torch.cat([
-                original,        # Original images
-                masked,          # Masked input images
-                mask_viz,        # Mask visualization
-                reconstruction   # Reconstructed images
-            ], dim=0)
-            
-            # Create grid
-            grid = vutils.make_grid(comparison, nrow=n_samples, normalize=True, value_range=(-1, 1))
-            
-            # Compute metrics for these samples (masked regions only)
-            sample_metrics = self.compute_batch_metrics(reconstruction, original, mask[:n_samples])
-            
-            if self.config.logging.use_wandb:
-                wandb.log({
-                    "samples": wandb.Image(grid),
-                    "sample_masked_psnr": sample_metrics['psnr'],
-                    "sample_masked_ssim": sample_metrics['ssim']
-                }, step=self.global_step)
-            
-            if self.writer is not None:
-                self.writer.add_image("samples", grid, self.global_step)
-                self.writer.add_scalar("sample_metrics/masked_psnr", sample_metrics['psnr'], self.global_step)
-                self.writer.add_scalar("sample_metrics/masked_ssim", sample_metrics['ssim'], self.global_step)
-            
-            # Save to file periodically
-            if self.global_step % (self.config.logging.sample_interval * 10) == 0:
-                os.makedirs('results/samples', exist_ok=True)
-                save_path = f'results/samples/step_{self.global_step}.png'
-                vutils.save_image(grid, save_path, normalize=True, value_range=(-1, 1))
-                print(f"Saved samples to {save_path} | Masked PSNR: {sample_metrics['psnr']:.2f}, Masked SSIM: {sample_metrics['ssim']:.4f}")
+        """Generate sample reconstructions for visualization.
+        
+        Args:
+            batch: Dictionary containing 'image' tensor
+            outputs: Dictionary containing 'reconstruction' tensor
+            mask: The actual mask used during training (B, 1, H, W)
+        """
+        import torchvision.utils as vutils
+        
+        # Create grid of images
+        n_samples = min(8, batch['image'].shape[0])
+
+        # Get original images and move to device
+        imgs = batch['image'][:n_samples].to(self.device)
+        
+        # Use the actual mask from training (not a new random one)
+        vis_mask = mask[:n_samples].to(self.device)
+        vis_masked = imgs * (1.0 - vis_mask)
+
+        # Get reconstructions and ensure they're on the same device
+        recon = outputs['reconstruction'][:n_samples].to(self.device)
+
+        comparison = torch.cat([
+            imgs,
+            vis_masked,
+            recon
+        ], dim=0)
+        
+        grid = vutils.make_grid(comparison, nrow=n_samples, normalize=True, value_range=(-1, 1))
+        
+        # Compute metrics for these samples
+        sample_metrics = self.compute_batch_metrics(recon, imgs)
+        
+        if self.config.logging.use_wandb:
+            wandb.log({
+                "samples": wandb.Image(grid),
+                "sample_psnr": sample_metrics['psnr'],
+                "sample_ssim": sample_metrics['ssim']
+            }, step=self.global_step)
+        
+        if self.writer is not None:
+            self.writer.add_image("samples", grid, self.global_step)
+            self.writer.add_scalar("sample_metrics/psnr", sample_metrics['psnr'], self.global_step)
+            self.writer.add_scalar("sample_metrics/ssim", sample_metrics['ssim'], self.global_step)
+        
+        # Save to file periodically
+        if self.global_step % (self.config.logging.sample_interval * 10) == 0:
+            os.makedirs('/content/drive/MyDrive/vae_results/samples', exist_ok=True)
+            save_path = f'/content/drive/MyDrive/vae_results/samples/step_{self.global_step}.png'
+            vutils.save_image(grid, save_path)
     
     def close(self):
         """Clean up logging resources."""
