@@ -60,7 +60,6 @@ class CelebAInpainting(Dataset):
         max_mask_size: int = 64,
         download: bool = True,
         transform: Optional[transforms.Compose] = None,
-        normalize: bool = True,
         mask_type: str = "random",
         mask_seed: Optional[int] = None,
         cache_dir: Optional[str] = None,
@@ -83,13 +82,11 @@ class CelebAInpainting(Dataset):
         self.root = root
         self.split = split
         self.image_size = image_size
-        self.normalize = normalize
 
         # Create transform if not provided
         if transform is None:
             transform_list = [
-                transforms.Resize(image_size),
-                transforms.CenterCrop(image_size),
+                transforms.Resize((image_size, image_size)),
             ]
 
             # Add horizontal flip for training
@@ -97,13 +94,9 @@ class CelebAInpainting(Dataset):
                 transform_list.append(transforms.RandomHorizontalFlip(p=0.5))
 
             transform_list.append(transforms.ToTensor())
-
-            # Normalize to [-1, 1] if requested
-            if normalize:
-                transform_list.append(
-                    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-                )
-
+            transform_list.append(
+                transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            )
             transform = transforms.Compose(transform_list)
 
         self.transform = transform

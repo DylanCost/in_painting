@@ -42,19 +42,50 @@ class InpaintingMetrics:
         Args:
             pred: Predicted tensor in [B, C, H, W] format.
             target: Target tensor in [B, C, H, W] format.
-            mask: Optional binary mask; currently unused but kept for API parity.
+            mask: Optional binary mask in [B, 1, H, W] or [B, H, W] format.
+                  If provided, SSIM is averaged only over masked pixels.
         """
         from skimage.metrics import structural_similarity
         
-        pred_np = pred.cpu().numpy().transpose(0, 2, 3, 1)
-        target_np = target.cpu().numpy().transpose(0, 2, 3, 1)
+        # Convert to NumPy with channel-last format: [B, H, W, C]
+        pred_np = pred.detach().cpu().numpy().transpose(0, 2, 3, 1)
+        target_np = target.detach().cpu().numpy().transpose(0, 2, 3, 1)
+        
+        mask_np = None
+        if mask is not None:
+            # Bring mask to CPU NumPy, ensure shape [B, H, W], and boolean
+            mask_np = mask.detach().cpu().numpy()
+            # Accept [B, 1, H, W] or [B, H, W]
+            if mask_np.ndim == 4:
+                # Collapse channel dimension
+                mask_np = mask_np[:, 0]
+            mask_np = mask_np.astype(bool)
         
         ssim_values = []
-        for p, t in zip(pred_np, target_np):
-            ssim_val = structural_similarity(p, t, channel_axis=-1, data_range=2.0)
+        for i, (p, t) in enumerate(zip(pred_np, target_np)):
+            # full=True returns (scalar_ssim, ssim_map[H, W])
+            _, ssim_map = structural_similarity(
+                p,
+                t,
+                channel_axis=-1,
+                data_range=2.0,
+                full=True,
+            )
+            
+            if mask_np is not None:
+                m = mask_np[i]
+                valid = m.sum()
+                if valid > 0:
+                    ssim_val = float(ssim_map[m].mean())
+                else:
+                    # Fallback: no masked pixels for this sample; use global mean
+                    ssim_val = float(ssim_map.mean())
+            else:
+                ssim_val = float(ssim_map.mean())
+            
             ssim_values.append(ssim_val)
         
-        return np.mean(ssim_values)
+        return float(np.mean(ssim_values))
     
     def lpips_distance(self, pred: torch.Tensor, target: torch.Tensor) -> float:
         """Calculate LPIPS perceptual distance."""

@@ -215,7 +215,6 @@ def main() -> None:
         split="test",
         image_size=IMAGE_SIZE,
         download=args.download,
-        normalize=True,
         mask_type="random",
     )
 

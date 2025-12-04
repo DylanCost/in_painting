@@ -53,9 +53,9 @@ class FlowMatchingConfig:
     epochs: int = 100
     batch_size: int = 32
     learning_rate: float = 1e-4
-    weight_decay: float = 1e-2
+    weight_decay: float = 0.0
     warmup_steps: int = 1000
-    min_lr: float = 1e-6
+    min_lr: float = 1e-5
     subsample_fraction: float = 1.0  # Fraction of training data to use (for debugging)
 
     # Sampling parameters
@@ -509,6 +509,7 @@ def evaluate_model(
 
     all_psnr = []
     all_ssim = []
+    all_mae = []
     all_lpips = []
 
     num_batches = (
@@ -541,6 +542,7 @@ def evaluate_model(
 
             all_psnr.append(metrics["psnr"])
             all_ssim.append(metrics["ssim"])
+            all_mae.append(metrics["mae"])
 
             # Optional LPIPS
             if lpips_metric is not None:
@@ -556,6 +558,7 @@ def evaluate_model(
         "metrics_masked": {
             "psnr": float(np.mean(all_psnr)),
             "ssim": float(np.mean(all_ssim)),
+            "mae": float(np.mean(all_mae)),
         },
     }
 
@@ -842,6 +845,8 @@ def main():
     logger.info(f"  Evaluated samples: {eval_results['evaluated_count']}")
     logger.info(f"  PSNR: {eval_results['metrics_masked']['psnr']:.2f} dB")
     logger.info(f"  SSIM: {eval_results['metrics_masked']['ssim']:.4f}")
+    if "mae" in eval_results["metrics_masked"]:
+        logger.info(f"  MAE: {eval_results['metrics_masked']['mae']:.6f}")
     if "lpips" in eval_results["metrics_masked"]:
         logger.info(f"  LPIPS: {eval_results['metrics_masked']['lpips']:.4f}")
 
