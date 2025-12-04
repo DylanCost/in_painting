@@ -236,7 +236,11 @@ def discover_checkpoints() -> List[CheckpointInfo]:
             if metrics:
                 psnr = metrics.get("psnr", 0)
                 ssim = metrics.get("ssim", 0)
-                display_name += f" (PSNR: {psnr:.2f} dB, SSIM: {ssim:.4f})"
+                mae = metrics.get("mae", None)
+                if mae is not None:
+                    display_name += f" (PSNR: {psnr:.2f} dB, SSIM: {ssim:.4f}, MAE: {mae:.4f})"
+                else:
+                    display_name += f" (PSNR: {psnr:.2f} dB, SSIM: {ssim:.4f})"
             
             checkpoints.append(CheckpointInfo(
                 path=best_ckpt,
@@ -253,7 +257,11 @@ def discover_checkpoints() -> List[CheckpointInfo]:
             if metrics:
                 psnr = metrics.get("psnr", 0)
                 ssim = metrics.get("ssim", 0)
-                display_name += f" (PSNR: {psnr:.2f} dB, SSIM: {ssim:.4f})"
+                mae = metrics.get("mae", None)
+                if mae is not None:
+                    display_name += f" (PSNR: {psnr:.2f} dB, SSIM: {ssim:.4f}, MAE: {mae:.4f})"
+                else:
+                    display_name += f" (PSNR: {psnr:.2f} dB, SSIM: {ssim:.4f})"
             
             checkpoints.append(CheckpointInfo(
                 path=last_ckpt,
@@ -447,6 +455,8 @@ def main():
                 if selected_ckpt.metrics:
                     st.text(f"PSNR: {selected_ckpt.metrics.get('psnr', 'N/A'):.2f} dB")
                     st.text(f"SSIM: {selected_ckpt.metrics.get('ssim', 'N/A'):.4f}")
+                    if 'mae' in selected_ckpt.metrics:
+                        st.text(f"MAE: {selected_ckpt.metrics['mae']:.6f}")
                     if 'lpips' in selected_ckpt.metrics:
                         st.text(f"LPIPS: {selected_ckpt.metrics['lpips']:.4f}")
     else:

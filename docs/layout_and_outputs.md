@@ -70,6 +70,7 @@ eval_results.json schema v1 (masked-only, CelebA-focused)
 - metrics_masked:
   - psnr: float
   - ssim: float
+  - mae: float
   - lpips: float (optional)
 
 Assumptions and notes
