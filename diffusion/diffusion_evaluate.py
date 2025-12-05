@@ -1,3 +1,8 @@
+"""
+This file contains the logic for the reverse diffusion process in the sample_ddpm function.
+It also contains the logic for running evaluation of the trained model on the test set.
+"""
+
 # diffusion_evaluate.py
 import torch
 from torch.utils.data import DataLoader
@@ -88,18 +93,51 @@ def sample_ddpm(model, scheduler, x_t, mask, num_timesteps=None):
 
 def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, save_dir=None):
     """
-    Run comprehensive evaluation on test set.
+    Run comprehensive evaluation of diffusion model inpainting performance on test set.
+    
+    Performs full DDPM sampling (1000 timesteps) starting from complete noise in masked
+    regions, then computes reconstruction quality metrics comparing inpainted results to
+    ground truth images. Saves visualizations, per-batch logs, and summary statistics.
+    
+    Args:
+        model: Trained diffusion model (UNet) in eval mode.
+        test_loader: DataLoader yielding batches with 'image' and 'filename' keys.
+        noise_scheduler: NoiseScheduler defining the diffusion process (forward/reverse).
+        mask_generator: MaskGenerator producing deterministic masks from filenames.
+        device: torch.device for computation ('cuda' or 'cpu').
+        save_dir: Optional save directory (unused; defaults to ./results/).
+    
+    Returns:
+        dict: Summary statistics with keys:
+            - 'psnr': Average Peak Signal-to-Noise Ratio (higher is better)
+            - 'ssim': Average Structural Similarity Index (higher is better, range [0,1])
+            - 'mse': Average Mean Squared Error (lower is better)
+            - 'mae': Average Mean Absolute Error (lower is better)
+    
+    Side Effects:
+        Creates/writes to:
+        - runs/diffusion/examples/samples.png: Visual comparison grid (original | masked input | inpainted)
+        - runs/diffusion/examples/best_test_metrics.txt: Best per-batch scores across test set
+        - runs/diffusion/diffusion_testing_log.txt: Per-batch metrics for all test samples
+    
+    Notes:
+        - All metrics are computed over the full image (not masked region only)
+        - First batch (up to 8 images) is saved for visual inspection
+        - Masks are deterministically generated based on input filenames
+        - Uses complete denoising (T=999 → T=0) for highest quality results
     """
 
     model.eval()
     
-    # Create save directory: ./results in CURRENT directory
-    save_dir = os.path.join(os.path.dirname(__file__), "results")
+    # Go up one directory from diffusion/ to project root, then create runs/diffusion/
+    base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "runs", "diffusion")
+    save_dir = os.path.join(base_dir, "examples")
+    log_dir = base_dir
+    
+    # Create directories
     os.makedirs(save_dir, exist_ok=True)
-
-    # Create logs directory and log file
-    log_dir = os.path.join(os.path.dirname(__file__), "logs")
     os.makedirs(log_dir, exist_ok=True)
+    
     log_file = os.path.join(log_dir, "diffusion_testing_log.txt")
     
     # Create/overwrite log file
@@ -119,8 +157,6 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     print("\nStarting evaluation...")
 
     for batch_idx, batch in enumerate(tqdm(test_loader, desc="Evaluating")):
-        if batch_idx > 2:
-            break
         images = batch['image'].to(device)
         filenames = batch['filename']
         
@@ -182,8 +218,6 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
             )
             print(f"\n✅ Saved sample images to {save_dir}/samples.png")
     
-    # Compute summary statistics
-    # Compute summary statistics
     summary = {
         'psnr': np.mean(all_psnr),
         'ssim': np.mean(all_ssim),
@@ -209,7 +243,7 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
     best_mae  = min(all_mae)  if all_mae  else float('nan')
 
     # Save best metrics
-    best_file = os.path.join(log_dir, "best_evaluation_metrics.txt")
+    best_file = os.path.join(base_dir, "best_test_metrics.txt") 
     with open(best_file, 'w') as f:
         f.write("BEST EVALUATION METRICS\n")
         f.write("=" * 60 + "\n")
@@ -221,13 +255,21 @@ def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, 
 
     print(f"\n🏆 Best evaluation metrics saved to {best_file}")
 
-    
     return summary
 
-def load_model(model, config, device):
-    # Look in current directory's weights folder
+def load_model(model, device):
+    """
+    Load the best model from runs/diffusion/checkpoints/diffusion_best_model.pt
+    """
+    # Go up one directory from diffusion/ to project root, then look in runs/diffusion/checkpoints
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    checkpoint_path = os.path.join(current_dir, 'weights', 'diffusion_final_model.pt')
+    checkpoint_path = os.path.join(
+        os.path.dirname(current_dir), 
+        'runs', 
+        'diffusion', 
+        'checkpoints', 
+        'diffusion_best_model.pt'
+    )
     
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
@@ -243,7 +285,6 @@ def evaluate():
     # Load config
     config = Config()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # print(f"Using device: {device}")
     
     # Create test dataset
     test_dataset = CelebADataset(
@@ -261,8 +302,6 @@ def evaluate():
         pin_memory=True
     )
     
-    # print(f"Test dataset size: {len(test_dataset)}")
-    
     # Create model
     model = UNetDiffusion(
         input_channels=config.unet.input_channels,
@@ -271,7 +310,7 @@ def evaluate():
         use_skip_connections=config.unet.use_skip_connections,
     ).to(device)
 
-    model = load_model(model, config, device)
+    model = load_model(model, device)
     
     model.eval()
     

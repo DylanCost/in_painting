@@ -1,3 +1,9 @@
+"""
+The purpose of this file is to create sets of images that have the exact same masks
+so that there can be good qualitative analysis for the paper. This file is unnecessary
+for normal runs of the code.
+"""
+
 import torch
 from torch.utils.data import DataLoader
 import os

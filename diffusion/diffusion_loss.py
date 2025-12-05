@@ -1,3 +1,8 @@
+"""
+This class holds the logic for the Diffusion models Loss function, calculated only on the differences
+within the masked portion of the image
+"""
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

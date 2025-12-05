@@ -1,3 +1,8 @@
+"""
+This file contains all the training logic for the diffusion model. The overall file for training
+will be diffusion_train.py. This file contains the training loop / validation function.
+"""
+
 import os
 import torch
 import copy
@@ -5,15 +10,8 @@ import torchvision.utils as vutils
 import numpy as np
 import pandas as pd
 
-from config import Config
-from noise_scheduler_config import NoiseConfig
-from data.celeba_dataset import CelebADataset
-from unet_diffusion import UNetDiffusion, NoiseScheduler
-from masking.mask_generator import MaskGenerator
 from evaluation.metrics import InpaintingMetrics
 from diffusion.diffusion_evaluate import sample_ddpm
-
-# from diffusion_evaluate import run_evaluation
 
 class DiffusionTrainer:
     """
@@ -70,7 +68,7 @@ class DiffusionTrainer:
             
             # Generate random masks
             masks = self.train_mask_generator.generate((B, 1, H, W)).to(self.device)
-            # ✓ Generate masks [B, 1, H, W] where 1 = inpaint region
+            # ✓ Generate masks [B, 1, H, W] where 1 = inpaint region 0 = outside inpaint region
             
             batch_size = images.size(0)  # ✓ Get batch size (same as B above)
             t = torch.randint(0, self.num_timesteps, (batch_size,), device=self.device)
@@ -121,9 +119,10 @@ class DiffusionTrainer:
         """
         self.model.eval()
 
-        # Use current directory's results folder
+        # Go up one directory from diffusion/ to project root, then create runs/diffusion/examples
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        save_dir = os.path.join(current_dir, 'results')
+        save_dir = os.path.join(os.path.dirname(current_dir), 'runs', 'diffusion', 'examples')
+        os.makedirs(save_dir, exist_ok=True)
         
         metrics_calc = InpaintingMetrics(device=self.device)
         # Collect metrics
@@ -200,8 +199,6 @@ class DiffusionTrainer:
     def train(self):
         """Full training loop with early stopping and checkpointing."""
         best_psnr = float('-inf')
-        epochs_no_improve = 0
-        # full_val_epoch = 25
         all_psnr = []
         all_ssim = []
         all_mse = []
@@ -215,10 +212,10 @@ class DiffusionTrainer:
             'mae': []
         }
         
-        # Create logs directory in the CURRENT directory (same folder as this file)
-        log_dir = os.path.join(os.path.dirname(__file__), "logs")
+        # Go up one directory from diffusion/ to project root, then create runs/diffusion/
+        current_dir = os.path.dirname(__file__)
+        log_dir = os.path.join(os.path.dirname(current_dir), "runs", "diffusion")
         os.makedirs(log_dir, exist_ok=True)
-
         log_file = os.path.join(log_dir, "diffusion_training_log.txt")
 
         with open(log_file, 'w') as f:
@@ -236,6 +233,7 @@ class DiffusionTrainer:
             train_loss = self.train_epoch(epoch)
             print(f"Train Loss: {train_loss:.4f}")
 
+            print(f"Running validation at epoch {epoch}")
             metrics = self.validate(epoch)
             curr_psnr = metrics['psnr']
             print(f"Validation PSNR: {curr_psnr:.4f}")
@@ -260,15 +258,8 @@ class DiffusionTrainer:
 
             if curr_psnr > best_psnr:
                 best_psnr = curr_psnr
-                epochs_no_improve = 0
                 self.save_checkpoint(epoch, "diffusion_best_model.pt")
                 print(f"✅ New best model saved (psnr={best_psnr:.4f})")
-            else:
-                epochs_no_improve += 1
-
-            # if epochs_no_improve >= self.patience:
-            #     print(f"\n⏹️ Early stopping after {epoch} epochs (no improvement for {self.patience})")
-            #     break
 
             all_psnr.append(metrics['psnr'])
             all_ssim.append(metrics['ssim'])
@@ -292,10 +283,10 @@ class DiffusionTrainer:
     # Checkpointing
     # -------------------------------------------------------------------------
     def save_checkpoint(self, epoch, filename):
-        """Save model and EMA state (if available)."""
-        # Use current directory instead of config path
+        """Save model and EMA state (if available) to runs/diffusion/checkpoints/."""
+        # Go up one directory from diffusion/ to project root, then create runs/diffusion/checkpoints
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        checkpoint_dir = os.path.join(current_dir, "weights")
+        checkpoint_dir = os.path.join(os.path.dirname(current_dir), "runs", "diffusion", "checkpoints")
         os.makedirs(checkpoint_dir, exist_ok=True)
         
         checkpoint = {

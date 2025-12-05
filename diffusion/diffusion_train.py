@@ -1,3 +1,8 @@
+"""
+This file centralizes all the logic necessaary to do the training portion of the diffusion model if you
+just want to run the training portion. If you want to do the full evaluation use the pipeline.py file instead
+"""
+
 import torch
 from torch.utils.data import DataLoader
 import sys
@@ -100,16 +105,11 @@ def main():
     all_psnr, all_ssim, all_mse, all_mae, dataframe = trainer.train()
     print("Training completed!")
     print("\n" + "="*60)
-    # print("METRICS PER BATCH")
-    # print("="*60)
-    # print(f"PSNR values: {all_psnr:.2f}")
-    # print(f"SSIM values: {all_ssim:.2f}")
-    # print(f"MSE values:  {all_mse:.2f}")
-    # print(f"MAE values:  {all_mae:.2f}")
-    # print("="*60)
 
-    # Save to a logs folder in the *current directory* (same folder as this script)
-    log_dir = os.path.join(os.path.dirname(__file__), "logs")
+
+    # Go up one directory from diffusion/ to project root, then create runs/diffusion/
+    current_dir = os.path.dirname(__file__)
+    log_dir = os.path.join(os.path.dirname(current_dir), "runs", "diffusion")
     os.makedirs(log_dir, exist_ok=True)
 
     csv_path = os.path.join(log_dir, "diffusion_data.csv")

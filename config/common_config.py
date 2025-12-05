@@ -31,7 +31,7 @@ class DataConfig:
     num_workers: int = 4
     augmentation: bool = True
     batch_size: int = 64
-    learning_rate: float = 0.0002 #0.0002
+    learning_rate: float = 0.0002
     epochs: int = 100
 
 

@@ -1,3 +1,7 @@
+"""
+This file contains the noise scheduler parameters that are used.
+"""
+
 # diffusion_config.py
 from dataclasses import dataclass
 

@@ -1,3 +1,8 @@
+"""
+This is the main file to run to do both training and test set evaluation for the diffusion model.
+"""
+
+
 import torch
 from torch.utils.data import DataLoader
 import sys
@@ -112,17 +117,10 @@ def main():
     print("Starting training...")
     all_psnr, all_ssim, all_mse, all_mae, dataframe = trainer.train()
     print("Training completed!")
-    # print("\n" + "="*60)
-    # print("METRICS PER BATCH")
-    # print("="*60)
-    # print(f"PSNR values: {all_psnr}")
-    # print(f"SSIM values: {all_ssim}")
-    # print(f"MSE values:  {all_mse}")
-    # print(f"MAE values:  {all_mae}")
-    # print("="*60)
 
     # Save to a logs folder in the *current directory* (same folder as this script)
-    log_dir = os.path.join(os.path.dirname(__file__), "logs")
+    current_dir = os.path.dirname(__file__)
+    log_dir = os.path.join(os.path.dirname(current_dir), "runs", "diffusion")
     os.makedirs(log_dir, exist_ok=True)
 
     csv_path = os.path.join(log_dir, "diffusion_data.csv")
@@ -155,7 +153,7 @@ def main():
         use_skip_connections=config.unet.use_skip_connections,
     ).to(device)
 
-    model = load_model(model, config, device)
+    model = load_model(model, device)
     model.eval()
 
     results = run_evaluation(

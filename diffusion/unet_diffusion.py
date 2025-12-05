@@ -1,3 +1,9 @@
+"""
+This file contains all the logic to build the actual UNet architecture. It also contains
+the code for the noise scheduler to add noise to images.
+"""
+
+
 import math
 
 import torch
