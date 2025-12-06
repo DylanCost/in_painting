@@ -149,7 +149,7 @@ To simulate realistic inpainting scenarios while maintaining experimental contro
 
 Critically, we generate a fixed set of mask-image pairs for evaluation, ensuring that all models are assessed on identical inpainting challenges. This eliminates variance due to mask sampling and enables direct comparison of reconstruction quality.
 
-\section{Experimental Results}
+\section{Experimental Results}\label{sec:experimental_results}
 
 \subsection{Evaluation Metrics}
 
@@ -182,6 +182,8 @@ Diffusion & 17.9 & 0.943 & 0.016 \\
 \end{tabular}
 \end{center}
 \end{table}
+
+In addition to these aggregate metrics, Appendix~\ref{sec:qualitative_examples} presents qualitative triptych examples for each model, with Flow Matching reconstructions illustrated in Figures~\ref{fig:fm_triptych_panel_01} and \ref{fig:fm_triptych_panel_02}.
 
 \subsection{Training Dynamics}
 
@@ -295,5 +297,42 @@ Integration steps & 50 \\
 \end{tabular}
 \end{center}
 \end{table}
+
+\section{Additional Qualitative Inpainting Examples}
+\label{sec:qualitative_examples}
+
+To complement the quantitative results in Section~\ref{sec:experimental_results}, we include qualitative triptych visualizations of the inpainting behavior of each model. Each triptych shows the masked input image, the ground-truth target, and the model's reconstruction.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=\linewidth]{figures/fm_triptych_panel_01.png}
+\end{center}
+\caption{Qualitative inpainting examples from the Flow Matching model (panel 1). Each triptych shows the masked input (left), ground-truth target (middle), and Flow Matching reconstruction (right).}
+\label{fig:fm_triptych_panel_01}
+\end{figure}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=\linewidth]{figures/fm_triptych_panel_02.png}
+\end{center}
+\caption{Qualitative inpainting examples from the Flow Matching model (panel 2), highlighting reconstructions under varying mask placements and occlusion severities.}
+\label{fig:fm_triptych_panel_02}
+\end{figure}
+
+\begin{figure}[t]
+\begin{center}
+\fbox{\rule{0pt}{2in}\rule{0.95\linewidth}{0pt}}
+\end{center}
+\caption{Placeholder for qualitative inpainting triptychs from the diffusion model. The final figure will mirror the layout of the Flow Matching panels once generated.}
+\label{fig:diffusion_triptych_placeholder}
+\end{figure}
+
+\begin{figure}[t]
+\begin{center}
+\fbox{\rule{0pt}{2in}\rule{0.95\linewidth}{0pt}}
+\end{center}
+\caption{Placeholder for qualitative inpainting triptychs from the VAE model. The final figure will mirror the layout of the Flow Matching panels once generated.}
+\label{fig:vae_triptych_placeholder}
+\end{figure}
 
 \end{document}
