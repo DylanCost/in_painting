@@ -83,25 +83,22 @@ Flow Matching & AdamW & $1\times 10^{-4} \rightarrow 10^{-5}$ over training step
 
 \subsection{Diffusion Model Implementation}
 
-Our diffusion model follows the DDPM formulation \citep{ho2020denoising}. The forward process adds Gaussian noise according to a linear schedule with $\beta_t$ ranging from $10^{-4}$ to $0.02$ over $T=1000$ timesteps, where $\beta_t$ controls the variance of noise added at each step. Here, $t$ denotes the timestep index ranging from 1 to $T$, and $x_t$ represents the progressively noisier version of the image at timestep $t$:
+Our diffusion model follows the DDPM formulation \citep{ho2020denoising}. The forward process adds Gaussian noise according to a linear schedule with $\beta_t$ ranging from $10^{-4}$ to $0.02$ over $T=1000$ timesteps:
 \begin{equation}
     q(x_t | x_{t-1}) = \mathcal{N}(x_t; \sqrt{1-\beta_t} x_{t-1}, \beta_t \mathbf{I})
 \end{equation}
-Small values of $\beta_t$ ensure gradual corruption of the image, allowing the reverse process to learn effective denoising at each noise level.
 
-The U-Net is trained to predict the noise $\epsilon$ added at each timestep, conditioned on the masked input and mask. We denote the model's predicted noise as $\epsilon_\theta(x_t, t, x_{\text{masked}}, m)$, where $\theta$ represents the learnable parameters of the neural network. The training objective is:
+The U-Net is trained to predict the noise $\epsilon$ added at each timestep, conditioned on the masked input and mask. The training objective is:
 \begin{equation}
     \mathcal{L}_{\text{diffusion}} = \mathbb{E}_{t, x_0, \epsilon}\left[ \| \epsilon - \epsilon_\theta(x_t, t, x_{\text{masked}}, m) \|^2 \right]
 \end{equation}
 where $x_{\text{masked}}$ is the masked image and $m$ is the binary mask.
 
-At inference, we perform $T$ denoising steps, initializing masked regions with pure noise while preserving known pixels. At each timestep $t$, we progressively denoise the image by removing a small amount of predicted noise. This iterative refinement is performed using the reparameterization trick, which replaces direct sampling from the conditional distribution $p_\theta(x_{t-1}|x_t)$ with a deterministic function plus independent noise:
+At inference, we perform $T$ denoising steps starting from pure noise in masked regions. At each timestep $t$, we sample using:
 \begin{equation}
 x_{t-1} = \frac{1}{\sqrt{\alpha_t}} \left( x_t - \frac{\beta_t}{\sqrt{1 - \bar{\alpha}_t}} \epsilon_\theta(x_t, t) \right) + \sigma_t z
 \end{equation}
-where $z \sim \mathcal{N}(0, \mathbf{I})$ for $t > 1$ and $z = 0$ for $t = 1$. Here, $\alpha_t := 1 - \beta_t$ represents the signal retention factor at step $t$, and $\bar{\alpha}_t := \prod_{s=1}^{t} \alpha_s$ is the cumulative product that determines the overall noise level at timestep $t$. 
-
-This equation computes a slightly less noisy image $x_{t-1}$ by subtracting the model's noise prediction ($\epsilon_\theta(x_t, t)$) from the current noisy image $x_t$. The coefficient $\frac{\beta_t}{\sqrt{1 - \bar{\alpha}_t}}$ scales the predicted noise appropriately based on the current noise level, ensuring that the correct amount of noise is removed at each step. The stochastic noise term $\sigma_t z$ ensures diversity in generated samples by introducing controlled randomness. Through repeated application of this denoising step from $t = T$ to $t = 1$, the model iteratively refines the masked regions to produce coherent completions.
+where $z \sim \mathcal{N}(0, \mathbf{I})$ for $t > 1$ and $z = 0$ for $t = 1$, $\alpha_t := 1 - \beta_t$, and $\bar{\alpha}_t := \prod_{s=1}^{t} \alpha_s$. This progressively denoises the image by subtracting scaled noise predictions at each step.
 
 
 \subsection{VAE Implementation}
@@ -184,7 +181,7 @@ Diffusion & 17.9 & 0.523 & 0.161 \\
 \end{center}
 \end{table}
 
-Table~\ref{tab:results} summarizes the final test set performance for each model. In addition to these aggregate metrics, Appendix~\ref{sec:qualitative_examples} presents qualitative triptych examples for each model, with Flow Matching reconstructions illustrated in Figures~\ref{fig:fm_triptych_panel_01} and \ref{fig:fm_triptych_panel_02}.
+Table~\ref{tab:results} summarizes the final test set performance for each model. In addition to these aggregate metrics, Appendix~\ref{sec:qualitative_examples} presents qualitative triptych examples for each model, with Flow Matching reconstructions illustrated in Figures~\ref{fig:fm_triptych_panel_01} and \ref{fig:fm_triptych_panel_02}. Diffusion reconstructions are illustrated in  Figures~\ref{fig:diff_triptych_panel_01} and \ref{fig:diff_triptych_panel_02}.
 
 \subsection{Training Dynamics}
 
@@ -325,7 +322,7 @@ To complement the quantitative results in Section~\ref{sec:experimental_results}
 \includegraphics[width=\linewidth]{figures/diff_triptych_panel_01.png}
 \end{center}
 \caption{Qualitative inpainting examples from the Diffusion model (panel 1). Each has the original image on the first row, masked on the second row, and the inpainted version on the third row}
-\label{fig:diffusion_triptych_placeholder}
+\label{fig:diff_triptych_panel_01}
 \end{figure}
 
 \begin{figure}[t]
@@ -333,7 +330,7 @@ To complement the quantitative results in Section~\ref{sec:experimental_results}
 \includegraphics[width=\linewidth]{figures/diff_triptych_panel_02.png}
 \end{center}
 \caption{Qualitative inpainting examples from the Diffusion model (panel 2)}
-\label{fig:vae_triptych_placeholder}
+\label{fig:diff_triptych_panel_02}
 \end{figure}
 
 \end{document}
