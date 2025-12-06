@@ -41,37 +41,15 @@ Facial inpainting presents an ideal benchmark for comparing these approaches. Hu
 
 Despite the proliferation of generative approaches, direct comparisons remain challenging due to architectural differences, varying training protocols, and inconsistent evaluation settings, which make it difficult to isolate the contribution of the generative paradigm from confounding factors.
 
-In this work, we perform a controlled comparison of Diffusion Models, VAEs, and Flow Matching for facial inpainting. Our experimental design emphasizes fairness through several key decisions: (1) closely matched U-Net-style architectures with similar parameter counts across all models, albeit while still retaining some non-trivial architectural differences such as additional attention blocks in the VAE, (2) identical data preprocessing and mask generation procedures, (3) consistent training hyperparameters and compute budgets (100 epochs), and (4) evaluation on the same held-out test set using standard metrics.
-
-\section{Dataset}
-
-\subsection{CelebA Dataset}
-
-We conduct our experiments on CelebA (CelebFaces Attributes) \citep{liu2015deep}, a large-scale face attributes dataset containing over 200,000 celebrity images with rich pose variation and background clutter. CelebA is widely adopted for facial analysis tasks including inpainting, making it suitable for benchmarking generative models.
-
-For computational efficiency and to maintain reasonable training times on consumer hardware, we resize all images to 128$\times$128 pixels and normalize pixel values to the range $[-1, 1]$. We start from the official CelebA split sizes---162,770 training, 19,867 validation, and 19,962 test images---but in our experiments we use only the first 1,024 images from the validation split for validation and fold the remaining 18,843 validation images into the training set, yielding 181,613 training images, 1,024 validation images, and 19,962 test images.
-
-\subsection{Mask Generation}
-
-To simulate realistic inpainting scenarios while maintaining experimental control, we employ random rectangular masks with side lengths uniformly sampled from $[16, 64]$ pixels. Mask positions are sampled uniformly across the image, ensuring that masks may occlude any facial region including eyes, nose, mouth, or hair.
-
-Critically, we generate a fixed set of mask-image pairs for evaluation, ensuring that all models are assessed on identical inpainting challenges. This eliminates variance due to mask sampling and enables direct comparison of reconstruction quality.
+In this work, we perform a controlled comparison of Diffusion Models, VAEs, and Flow Matching for facial inpainting. Our experimental design emphasizes fairness through several key decisions: (1) closely matched U-Net-style architectures with similar parameter counts across all models, albeit while still retaining some noteable architectural differences such as additional attention blocks in the VAE, (2) identical data preprocessing and mask generation procedures, (3) consistent training hyperparameters and compute budgets, and (4) evaluation on the same held-out test set using standard metrics.
 
 \section{Related Work}
 
-\subsection{Variational Autoencoders}
-
 Variational Autoencoders \citep{kingma2014auto, rezende2014stochastic} learn latent variable models through amortized variational inference. The encoder maps inputs to a distribution over latent codes, while the decoder generates outputs conditioned on sampled latents. Training maximizes a variational lower bound comprising reconstruction and KL-divergence terms. VAEs have been successfully applied to inpainting by conditioning on masked inputs and reconstructing complete images \citep{zheng2019pluralistic}.
-
-\subsection{Diffusion Models}
 
 Denoising Diffusion Probabilistic Models \citep{ho2020denoising, sohl2015deep} define a forward process that gradually corrupts data with Gaussian noise and learn a reverse process that iteratively denoises to recover clean samples. \citet{song2021scorebased} unified score-based and diffusion perspectives, while \citet{dhariwal2021diffusion} demonstrated that diffusion models can surpass GANs on image synthesis. For inpainting, diffusion models can be conditioned on unmasked regions through modified sampling procedures \citep{lugmayr2022repaint}.
 
-\subsection{Flow Matching}
-
 Flow Matching \citep{lipman2023flow} and related approaches \citep{liu2023flow, albergo2023building} learn continuous normalizing flows by regressing to target velocity fields. Unlike traditional normalizing flows, flow matching avoids expensive Jacobian computations during training. Rectified flows \citep{liu2023flow} further simplify the target velocity to straight-line interpolations between noise and data. These methods have shown promise for efficient high-quality generation.
-
-\subsection{U-Net Architecture}
 
 The U-Net architecture \citep{ronneberger2015u} employs an encoder-decoder structure with skip connections that concatenate encoder features to corresponding decoder layers. Originally developed for biomedical image segmentation, U-Net has become the de facto standard for image-to-image tasks including inpainting and forms the backbone of most diffusion model implementations.
 
@@ -79,11 +57,26 @@ The U-Net architecture \citep{ronneberger2015u} employs an encoder-decoder struc
 
 \subsection{Shared Architecture and Training Setup}
 
-To isolate the effect of generative paradigm from architectural confounds, we employ closely matched U-Net-style backbones with similar parameter counts across all three models. While the overall encoder-decoder structure is aligned, the VAE includes additional attention blocks that are not present in the diffusion or flow matching networks. Our U-Net consists of four encoder and four decoder blocks with channel dimensions $[64, 128, 256, 512, 512]$. Each block contains two convolutional layers with GroupNorm and GELU activations. We incorporate self-attention at the $16\times16$ resolution level to capture long-range dependencies.
+To reduce architectural confounds, we base all three models on U-Net-style encoder--decoder backbones with the same depth and channel layout, though we do not enforce a perfectly identical implementation across paradigms. Each network uses a series of encoder and decoder blocks with channel dimensions $[64, 128, 256, 512, 512]$, with two convolutional layers per block, GroupNorm, GELU activations, and skip connections. The placement and use of attention blocks is not fully shared: the flowmatching and diffusion implementations include one attention block in the encoder and decoder components, while the VAE additionally applies attention at multiple resolution levels.
 
 All models receive as input a 4-channel tensor: the 3-channel masked image (with zeros in masked regions) concatenated with a 1-channel binary mask indicating missing pixels. This conditioning strategy provides explicit information about which regions require reconstruction.
 
-Training hyperparameters are held constant: Adam optimizer with learning rate $2 \times 10^{-4}$ (cosine annealed to $10^{-6}$), batch size 64, and 100 training epochs. We evaluate on the validation set every epoch and report metrics on the held-out test set using the best validation checkpoint.
+We keep most high-level training settings aligned across models: all experiments use a batch size of 64, are run for 100 epochs, and are evaluated on the validation set every epoch, reporting test-set metrics for the best validation checkpoint. However, the precise optimizer settings and learning rate schedules differ between paradigms; Table~\ref{tab:lr_schedules} summarizes the starting and ending learning rates and warmup policies for each model.
+
+\begin{table}[t]
+\centering
+\caption{Learning rate schedules and warmup policies for each model. All learning rates use cosine annealing after any warmup phase.}
+\label{tab:lr_schedules}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model} & \textbf{Optimizer} & \textbf{LR schedule} & \textbf{Warmup} \\
+\midrule
+VAE & Adam & $2\times 10^{-4} \rightarrow 10^{-6}$ over 100 epochs & None \\
+Diffusion & AdamW & $2\times 10^{-4} \rightarrow 10^{-6}$ over 100 epochs & None \\
+Flow Matching & AdamW & $1\times 10^{-4} \rightarrow 10^{-5}$ over training steps & Linear, first 1000 steps \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Diffusion Model Implementation}
 
@@ -141,6 +134,20 @@ The training objective regresses to this target velocity:
 \end{equation}
 
 At inference, we integrate the learned velocity field from $t=0$ to $t=1$ using 50 Euler steps, initializing from Gaussian noise in masked regions.
+
+\section{Dataset}
+
+\subsection{CelebA Dataset}
+
+We conduct our experiments on CelebA (CelebFaces Attributes) \citep{liu2015deep}, a large-scale face attributes dataset containing over 200,000 celebrity images with rich pose variation and background clutter. CelebA is widely adopted for facial analysis tasks including inpainting, making it suitable for benchmarking generative models.
+
+For computational efficiency and to maintain reasonable training times on consumer hardware, we resize all images to 128$\times$128 pixels and normalize pixel values to the range $[-1, 1]$. We start from the official CelebA split sizes---162,770 training, 19,867 validation, and 19,962 test images---but in our experiments we use only the first 1,024 images from the validation split for validation and fold the remaining 18,843 validation images into the training set, yielding 181,613 training images, 1,024 validation images, and 19,962 test images.
+
+\subsection{Mask Generation}
+
+To simulate realistic inpainting scenarios while maintaining experimental control, we employ random rectangular masks with side lengths uniformly sampled from $[16, 64]$ pixels. Mask positions are sampled uniformly across the image, ensuring that masks may occlude any facial region including eyes, nose, mouth, or hair.
+
+Critically, we generate a fixed set of mask-image pairs for evaluation, ensuring that all models are assessed on identical inpainting challenges. This eliminates variance due to mask sampling and enables direct comparison of reconstruction quality.
 
 \section{Experimental Results}
 
@@ -266,8 +273,8 @@ Table~\ref{tab:hyperparams} summarizes the hyperparameters used across all exper
 \midrule
 Image resolution & 128$\times$128 \\
 Batch size & 64 \\
-Learning rate & $2 \times 10^{-4}$ (cosine annealed to $10^{-6}$) \\
-Optimizer & Adam ($\beta_1$=0.9, $\beta_2$=0.999) \\
+Learning rate schedule & Model-specific cosine decay (see Table~\ref{tab:lr_schedules}) \\
+Optimizer & Adam/AdamW \\
 Training epochs & 100 \\
 Mask size range & [16, 64] pixels \\
 \midrule
