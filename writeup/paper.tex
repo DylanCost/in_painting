@@ -272,8 +272,8 @@ Table~\ref{tab:hyperparams} summarizes the hyperparameters used across all exper
 \textbf{Hyperparameter} & \textbf{Value} \\
 \midrule
 Image resolution & 128$\times$128 \\
-Batch size & 32 \\
-Learning rate & $10^{-4}$ \\
+Batch size & 64 \\
+Learning rate & $2 \times 10^{-4}$ (cosine annealed to $10^{-6}$) \\
 Optimizer & Adam ($\beta_1$=0.9, $\beta_2$=0.999) \\
 Training epochs & 100 \\
 Mask size range & [16, 64] pixels \\
