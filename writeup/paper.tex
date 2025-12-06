@@ -1,0 +1,291 @@
+\documentclass{article}
+\usepackage{iclr2026_conference,times}  
+
+% Optional math commands
+\input{math_commands.tex}
+
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+ 
+\title{A Comparative Study of Generative Models for \\Facial Image Inpainting: Diffusion, VAE, and Flow Matching}
+
+% Authors hidden for double-blind review
+\author{Dylan Costello, Noah Giles, Nicholas Cox \\
+Paper under double-blind review}
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+
+%\iclrfinalcopy % Uncomment for camera-ready version
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Image inpainting, the task of reconstructing missing or corrupted regions in images, remains a fundamental challenge in computer vision. We present a systematic comparison of three generative paradigms for facial image inpainting: Diffusion Models, Variational Autoencoders (VAEs), and Flow Matching. To ensure a fair evaluation, we employ a unified U-Net architecture across all models, identical training configurations, and consistent mask generation strategies on the CelebA dataset at 128$\times$128 resolution. Our experiments over 100 training epochs reveal that VAEs achieve superior reconstruction quality with PSNR of 33.8 dB and SSIM of 0.961, while Flow Matching provides competitive performance with greater training stability. Diffusion models, despite their recent success in generative tasks, exhibit significant training instability in this constrained setting, suggesting they may require longer training horizons or additional architectural modifications for inpainting tasks.
+\end{abstract}
+
+\section{Introduction}
+
+Image inpainting---the reconstruction of missing or damaged regions within an image---is a long-standing problem in computer vision with applications spanning photo restoration, object removal, and content-aware editing. The advent of deep generative models has dramatically advanced the state of the art, enabling semantically coherent reconstructions that respect both local texture patterns and global image structure.
+
+Among generative approaches, three paradigms have emerged as particularly influential: Variational Autoencoders \citep{kingma2014auto}, which learn compressed latent representations through variational inference; Diffusion Models \citep{ho2020denoising}, which generate samples through iterative denoising; and Flow Matching \citep{lipman2023flow}, which learns continuous normalizing flows via regression to target velocity fields. Each paradigm offers distinct inductive biases and training dynamics that may differentially impact inpainting performance.
+
+Facial inpainting presents an ideal benchmark for comparing these approaches. Human faces exhibit strong structural regularities (symmetric features, consistent spatial relationships) while also requiring fine-grained texture synthesis (skin, hair, eyes). This combination of global coherence and local detail makes facial inpainting a discriminating test of generative model capabilities.
+
+Despite the proliferation of generative approaches, direct comparisons remain challenging due to architectural differences, varying training protocols, and inconsistent evaluation settings. Prior work typically optimizes each model class independently, making it difficult to isolate the contribution of the generative paradigm from confounding factors.
+
+In this work, we address this gap through a controlled comparison of Diffusion Models, VAEs, and Flow Matching for facial inpainting. Our experimental design emphasizes fairness through several key decisions: (1) a shared U-Net backbone architecture across all models, (2) identical data preprocessing and mask generation procedures, (3) consistent training hyperparameters and compute budgets (100 epochs), and (4) evaluation on the same held-out test set using standard metrics.
+
+Our contributions are as follows:
+\begin{itemize}
+    \item We present the first systematic comparison of Diffusion, VAE, and Flow Matching paradigms for image inpainting under controlled experimental conditions.
+    \item We demonstrate that VAEs achieve superior reconstruction metrics (PSNR, SSIM, MAE) on facial inpainting when architectural and training factors are held constant.
+    \item We provide analysis of training dynamics, revealing that Diffusion models exhibit substantial instability in this setting, while Flow Matching offers a favorable stability-performance trade-off.
+\end{itemize}
+
+\section{Dataset}
+
+\subsection{CelebA Dataset}
+
+We conduct our experiments on CelebA (CelebFaces Attributes) \citep{liu2015deep}, a large-scale face attributes dataset containing over 200,000 celebrity images with rich pose variation and background clutter. CelebA is widely adopted for facial analysis tasks including inpainting, making it suitable for benchmarking generative models.
+
+For computational efficiency and to maintain reasonable training times on consumer hardware, we resize all images to 128$\times$128 pixels and normalize pixel values to the range $[-1, 1]$. We partition the dataset into training (162,770 images), validation (19,867 images), and test (19,962 images) splits following the standard protocol.
+
+\subsection{Mask Generation}
+
+To simulate realistic inpainting scenarios while maintaining experimental control, we employ random rectangular masks with side lengths uniformly sampled from $[16, 64]$ pixels. Mask positions are sampled uniformly across the image, ensuring that masks may occlude any facial region including eyes, nose, mouth, or hair.
+
+Critically, we generate a fixed set of mask-image pairs for evaluation, ensuring that all models are assessed on identical inpainting challenges. This eliminates variance due to mask sampling and enables direct comparison of reconstruction quality.
+
+\section{Related Work}
+
+\subsection{Variational Autoencoders}
+
+Variational Autoencoders \citep{kingma2014auto, rezende2014stochastic} learn latent variable models through amortized variational inference. The encoder maps inputs to a distribution over latent codes, while the decoder generates outputs conditioned on sampled latents. Training maximizes a variational lower bound comprising reconstruction and KL-divergence terms. VAEs have been successfully applied to inpainting by conditioning on masked inputs and reconstructing complete images \citep{zheng2019pluralistic}.
+
+\subsection{Diffusion Models}
+
+Denoising Diffusion Probabilistic Models \citep{ho2020denoising, sohl2015deep} define a forward process that gradually corrupts data with Gaussian noise and learn a reverse process that iteratively denoises to recover clean samples. \citet{song2021scorebased} unified score-based and diffusion perspectives, while \citet{dhariwal2021diffusion} demonstrated that diffusion models can surpass GANs on image synthesis. For inpainting, diffusion models can be conditioned on unmasked regions through modified sampling procedures \citep{lugmayr2022repaint}.
+
+\subsection{Flow Matching}
+
+Flow Matching \citep{lipman2023flow} and related approaches \citep{liu2023flow, albergo2023building} learn continuous normalizing flows by regressing to target velocity fields. Unlike traditional normalizing flows, flow matching avoids expensive Jacobian computations during training. Rectified flows \citep{liu2023flow} further simplify the target velocity to straight-line interpolations between noise and data. These methods have shown promise for efficient high-quality generation.
+
+\subsection{U-Net Architecture}
+
+The U-Net architecture \citep{ronneberger2015u} employs an encoder-decoder structure with skip connections that concatenate encoder features to corresponding decoder layers. Originally developed for biomedical image segmentation, U-Net has become the de facto standard for image-to-image tasks including inpainting and forms the backbone of most diffusion model implementations.
+
+\section{Methods}
+
+\subsection{Shared Architecture and Training Setup}
+
+To isolate the effect of generative paradigm from architectural confounds, we employ a unified U-Net backbone across all three models. Our U-Net consists of four encoder and four decoder blocks with channel dimensions $[64, 128, 256, 512]$. Each block contains two convolutional layers with GroupNorm and SiLU activations. We incorporate self-attention at the $16\times16$ resolution level to capture long-range dependencies.
+
+All models receive as input a 4-channel tensor: the 3-channel masked image (with zeros in masked regions) concatenated with a 1-channel binary mask indicating missing pixels. This conditioning strategy provides explicit information about which regions require reconstruction.
+
+Training hyperparameters are held constant: Adam optimizer with learning rate $10^{-4}$, batch size 32, and 100 training epochs. We evaluate on the validation set every epoch and report metrics on the held-out test set using the best validation checkpoint.
+
+\subsection{Diffusion Model Implementation}
+
+Our diffusion model follows the DDPM formulation \citep{ho2020denoising}. The forward process adds Gaussian noise according to a linear schedule with $\beta_t$ ranging from $10^{-4}$ to $0.02$ over $T=1000$ timesteps:
+\begin{equation}
+    q(x_t | x_{t-1}) = \mathcal{N}(x_t; \sqrt{1-\beta_t} x_{t-1}, \beta_t \mathbf{I})
+\end{equation}
+
+The U-Net is trained to predict the noise $\epsilon$ added at each timestep, conditioned on the masked input and mask. The training objective is:
+\begin{equation}
+    \mathcal{L}_{\text{diffusion}} = \mathbb{E}_{t, x_0, \epsilon}\left[ \| \epsilon - \epsilon_\theta(x_t, t, x_{\text{masked}}, m) \|^2 \right]
+\end{equation}
+where $x_{\text{masked}}$ is the masked image and $m$ is the binary mask.
+
+At inference, we perform $T$ denoising steps, initializing masked regions with pure noise while preserving known pixels. The model iteratively refines the masked regions to produce coherent completions.
+
+\subsection{VAE Implementation}
+
+Our VAE adapts the U-Net backbone into an encoder-decoder structure with a latent bottleneck. The encoder maps the concatenated masked image and mask to mean $\mu$ and log-variance $\log\sigma^2$ vectors of dimension 512. We apply the reparameterization trick to sample latent codes:
+\begin{equation}
+    z = \mu + \sigma \odot \epsilon, \quad \epsilon \sim \mathcal{N}(0, \mathbf{I})
+\end{equation}
+
+The decoder reconstructs the full image from the latent code. The training objective combines reconstruction and regularization:
+\begin{equation}
+    \mathcal{L}_{\text{VAE}} = \| x - \hat{x} \|_1 + \beta \cdot D_{\text{KL}}(q(z|x) \| p(z))
+\end{equation}
+where $\beta=0.001$ balances reconstruction fidelity against latent regularization. We use L1 reconstruction loss for sharper outputs.
+
+Unlike diffusion and flow matching, the VAE produces reconstructions in a single forward pass, offering significant inference speed advantages.
+
+\subsection{Flow Matching Implementation}
+
+Our flow matching implementation follows \citet{lipman2023flow}. We define an interpolation between source (Gaussian noise) and target (ground truth) distributions:
+\begin{equation}
+    x_t = (1-t) \cdot \epsilon + t \cdot x_0, \quad t \in [0, 1]
+\end{equation}
+
+The U-Net learns to predict the velocity field $v_t$ that transports probability mass along this interpolation:
+\begin{equation}
+    v_t^* = x_0 - \epsilon
+\end{equation}
+
+The training objective regresses to this target velocity:
+\begin{equation}
+    \mathcal{L}_{\text{flow}} = \mathbb{E}_{t, x_0, \epsilon}\left[ \| v_\theta(x_t, t, x_{\text{masked}}, m) - v_t^* \|^2 \right]
+\end{equation}
+
+At inference, we integrate the learned velocity field from $t=0$ to $t=1$ using 50 Euler steps, initializing from Gaussian noise in masked regions.
+
+\section{Experimental Results}
+
+\subsection{Evaluation Metrics}
+
+We evaluate reconstruction quality using three complementary metrics:
+
+\textbf{Peak Signal-to-Noise Ratio (PSNR)} measures pixel-wise reconstruction accuracy in decibels. Higher values indicate better reconstruction, with values above 30 dB generally considered high quality.
+
+\textbf{Structural Similarity Index (SSIM)} \citep{wang2004image} assesses perceptual similarity by comparing luminance, contrast, and structure. Values range from 0 to 1, with 1 indicating perfect similarity.
+
+\textbf{Mean Absolute Error (MAE)} computes the average absolute pixel difference. Lower values indicate better reconstruction.
+
+All metrics are computed over the masked regions only, as unmasked pixels are trivially preserved.
+
+\subsection{Quantitative Results}
+
+Table~\ref{tab:results} summarizes the final test set performance for each model. The VAE achieves the best performance across all metrics, with PSNR of 33.8 dB, SSIM of 0.961, and MAE of 0.015. Flow Matching attains competitive results with PSNR of 18.1 dB and SSIM of 0.943. The Diffusion model underperforms with PSNR of 17.9 dB, though it achieves similar SSIM to Flow Matching.
+
+\begin{table}[t]
+\caption{Test set performance comparison at epoch 100. Best results in bold.}
+\label{tab:results}
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model} & \textbf{PSNR (dB) $\uparrow$} & \textbf{SSIM $\uparrow$} & \textbf{MAE $\downarrow$} \\
+\midrule
+VAE & \textbf{33.8} & \textbf{0.961} & \textbf{0.015} \\
+Flow Matching & 18.1 & 0.943 & 0.017 \\
+Diffusion & 17.9 & 0.943 & 0.016 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsection{Training Dynamics}
+
+Beyond final performance, the training curves reveal important differences in optimization behavior (Figures~\ref{fig:psnr}, \ref{fig:ssim}, \ref{fig:mae}).
+
+\textbf{VAE} exhibits remarkably stable training with monotonically improving metrics throughout. PSNR increases smoothly from 29 dB to 34 dB, while SSIM converges to 0.96 with minimal variance. This stability reflects the well-behaved optimization landscape of the VAE objective.
+
+\textbf{Flow Matching} also demonstrates stable training dynamics, with PSNR improving from 11 dB to 18 dB and SSIM from 0.89 to 0.94. The smooth convergence curves suggest that flow matching provides reliable gradients throughout training.
+
+\textbf{Diffusion} exhibits pronounced instability, with large spikes in all metrics throughout training. PSNR fluctuates dramatically, dropping to below 5 dB at certain epochs before recovering. Similarly, MAE shows spikes exceeding 0.10. This instability persists even late in training (epochs 60-80), indicating fundamental optimization challenges rather than early-training transients.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=0.9\linewidth]{figures/PSNR_comparison.png}
+\end{center}
+\caption{PSNR over training epochs. VAE (blue) achieves substantially higher PSNR with stable convergence. Flow Matching (orange) and Diffusion (green) show similar final performance, but Diffusion exhibits severe instability throughout training.}
+\label{fig:psnr}
+\end{figure}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=0.9\linewidth]{figures/SSIM_comparison.png}
+\end{center}
+\caption{SSIM over training epochs. All models achieve high structural similarity ($>$0.90), with VAE reaching the highest values. Diffusion shows characteristic instability while Flow Matching converges smoothly.}
+\label{fig:ssim}
+\end{figure}
+
+\begin{figure}[t] 
+\begin{center}
+\includegraphics[width=0.9\linewidth]{figures/MAE_comparison.png}
+\end{center}
+\caption{MAE over training epochs. Lower is better. VAE and Flow Matching converge to similar low error values with stable training. Diffusion exhibits dramatic spikes, particularly in early-to-mid training, with MAE occasionally exceeding 0.10.}
+\label{fig:mae}
+\end{figure}
+
+\subsection{Analysis}
+
+The substantial performance gap between VAE and the other approaches warrants examination. We identify several contributing factors:
+
+\textbf{Direct reconstruction objective.} The VAE directly optimizes reconstruction loss, whereas diffusion and flow matching learn auxiliary objectives (noise prediction and velocity regression) that indirectly enable generation. For the specific task of inpainting---where the goal is reconstruction rather than diverse sampling---direct optimization may be advantageous.
+
+\textbf{Single-pass inference.} VAE reconstruction requires only one forward pass, while diffusion and flow matching require iterative sampling. With fixed training epochs, the VAE processes more effective gradient updates per epoch since each sample is used once for direct reconstruction rather than across multiple timesteps.
+
+\textbf{Training horizon.} Diffusion models are known to require extensive training to achieve optimal performance. Our 100-epoch budget, while sufficient for VAE convergence, may be inadequate for diffusion models to fully learn the score function across all noise levels.
+
+\textbf{Conditioning mechanism.} Our simple concatenation-based conditioning may not optimally leverage the masked image information for iterative models. More sophisticated conditioning approaches (e.g., cross-attention, guided sampling) could improve diffusion and flow matching performance.
+
+The instability of diffusion model training is particularly notable. The large metric fluctuations suggest sensitivity to the noise level distribution during training or potential mode-seeking behavior. Techniques such as loss weighting across timesteps \citep{ho2020denoising} or progressive training schedules may help stabilize optimization.
+
+\section{Conclusion}
+
+We presented a controlled comparison of three generative paradigms---Diffusion Models, Variational Autoencoders, and Flow Matching---for facial image inpainting on CelebA. By employing a shared U-Net architecture and identical training configurations, we isolated the contribution of the generative paradigm to inpainting performance.
+
+Our experiments reveal that VAEs substantially outperform both Diffusion and Flow Matching approaches under these conditions, achieving PSNR of 33.8 dB compared to approximately 18 dB for the alternatives. The VAE also exhibited superior training stability, converging smoothly over 100 epochs. Flow Matching demonstrated competitive performance with stable training dynamics, suggesting it as a promising middle ground. Diffusion models, despite their recent successes in generative tasks, exhibited significant training instability and underperformed in this constrained setting.
+
+These findings should be interpreted within the scope of our experimental design. The 128$\times$128 resolution, 100-epoch training budget, and simple rectangular masks represent constrained conditions that may favor certain approaches. Diffusion models in particular may benefit from longer training, higher resolution, or more sophisticated conditioning mechanisms.
+
+Future work should investigate several extensions: complex mask shapes (irregular, semantic-aware), higher image resolutions where diffusion models have demonstrated strong performance, guided sampling strategies for diffusion and flow matching, and perceptual loss functions that better capture human judgments of inpainting quality. Additionally, examining the diversity of generated completions---where diffusion models may excel despite lower average metrics---would provide a more complete picture of each paradigm's strengths.
+
+\subsubsection*{Acknowledgments}
+
+Acknowledgments omitted for anonymous review.
+
+\bibliography{references}
+\bibliographystyle{iclr2026_conference}
+
+\appendix
+\section{Implementation Details}
+
+\subsection{U-Net Architecture}
+
+Our U-Net consists of an encoder and decoder with skip connections. The encoder contains four down-sampling blocks with channel dimensions [64, 128, 256, 512]. Each block applies two 3$\times$3 convolutions with GroupNorm (8 groups) and SiLU activation, followed by 2$\times$2 max pooling. Self-attention is applied at the 16$\times$16 resolution level.
+
+The decoder mirrors the encoder with transposed convolutions for upsampling. Skip connections concatenate encoder features to decoder features at each resolution level. A final 1$\times$1 convolution produces the 3-channel output.
+
+For diffusion and flow matching, we add sinusoidal timestep embeddings that modulate the network via FiLM layers. The VAE omits timestep conditioning.
+
+\subsection{Hyperparameters}
+
+Table~\ref{tab:hyperparams} summarizes the hyperparameters used across all experiments.
+
+\begin{table}[h]
+\caption{Training hyperparameters.}
+\label{tab:hyperparams}
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+\textbf{Hyperparameter} & \textbf{Value} \\
+\midrule
+Image resolution & 128$\times$128 \\
+Batch size & 32 \\
+Learning rate & $10^{-4}$ \\
+Optimizer & Adam ($\beta_1$=0.9, $\beta_2$=0.999) \\
+Training epochs & 100 \\
+Mask size range & [16, 64] pixels \\
+\midrule
+\multicolumn{2}{c}{\textit{Diffusion-specific}} \\
+\midrule
+Diffusion steps $T$ & 1000 \\
+$\beta$ schedule & Linear ($10^{-4}$ to 0.02) \\
+\midrule
+\multicolumn{2}{c}{\textit{VAE-specific}} \\
+\midrule
+Latent dimension & 512 \\
+KL weight $\beta$ & 0.001 \\
+\midrule
+\multicolumn{2}{c}{\textit{Flow Matching-specific}} \\
+\midrule
+Integration steps & 50 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
+
+\end{document}
