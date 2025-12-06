@@ -280,7 +280,7 @@ encoder--decoder backbone but without any time or diffusion-step conditioning.
 The encoder consumes a masked image and an optional binary mask by
 concatenating them into a $(3{+}1)$-channel input; the mask therefore
 influences the latent representation but is \emph{not} provided to the
-decoder. The encoder outputs are flattened and projected into mean and
+decoder separately. The encoder outputs are flattened and projected into mean and
 log-variance vectors in a low-dimensional latent space (default dimension
 $32$), and the decoder reconstructs an RGB image from a sampled latent code,
 using U-Net skip connections (when enabled) and self-attention applied at the
