@@ -133,7 +133,7 @@ The training objective regresses to this target velocity:
     \mathcal{L}_{\text{flow}} = \mathbb{E}_{t, x_0, \epsilon}\left[ \| v_\theta(x_t, t, x_{\text{masked}}, m) - v_t^* \|^2 \right]
 \end{equation}
 
-At inference, we integrate the learned velocity field from $t=0$ to $t=1$ using 50 Euler steps, initializing from Gaussian noise in masked regions.
+At inference on the test set, we integrate the learned velocity field from $t=0$ to $t=1$ using 100 Euler steps, initializing from Gaussian noise in masked regions.
 
 \section{Dataset}
 
@@ -290,7 +290,7 @@ KL weight $\beta$ & 0.001 \\
 \midrule
 \multicolumn{2}{c}{\textit{Flow Matching-specific}} \\
 \midrule
-Integration steps & 50 \\
+Integration steps & 100 \\
 \bottomrule
 \end{tabular}
 \end{center}
