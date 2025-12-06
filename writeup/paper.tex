@@ -187,17 +187,17 @@ Table~\ref{tab:results} summarizes the final test set performance for each model
 
 Beyond final performance, the training curves reveal important differences in optimization behavior (Figures~\ref{fig:psnr}, \ref{fig:ssim}, \ref{fig:mae}).
 
-\textbf{VAE} exhibits remarkably stable training with monotonically improving metrics throughout. PSNR increases smoothly from 29 dB to 34 dB, while SSIM converges to 0.636 with minimal variance. This stability reflects the well-behaved optimization landscape of the VAE objective.
+\textbf{VAE} exhibits remarkably stable training with nearly monotonically improving metrics throughout. PSNR increases smoothly from 19 dB to about 25 dB, while SSIM converges to 0.636 with minimal variance. We conjecture that this stability reflects the well-behaved optimization landscape of the VAE objective.
 
-\textbf{Flow Matching} also demonstrates stable training dynamics, with PSNR improving from 11 dB to 18 dB and SSIM from 0.89 to 0.94. The smooth convergence curves suggest that flow matching provides reliable gradients throughout training.
+\textbf{Flow Matching} also demonstrates stable training dynamics, with PSNR improving from 11 dB to 18 dB and SSIM from 0.19 to 0.54. The relatively smooth convergence curves suggest that flow matching provides reliable gradients throughout training.
 
-\textbf{Diffusion} exhibits pronounced instability, with large spikes in all metrics throughout training. PSNR fluctuates dramatically, dropping to below 5 dB at certain epochs before recovering. Similarly, MAE shows spikes exceeding 0.10. This instability persists even late in training (epochs 60-80), indicating fundamental optimization challenges rather than early-training transients.
+\textbf{Diffusion} exhibits pronounced instability, with large spikes in all metrics throughout training. PSNR fluctuates dramatically, dropping to below 5 dB at certain epochs before recovering. Similarly, MAE shows spikes exceeding 0.10. This likely reflects the stochastic nature of the diffusion process, where the inherently noisy training objective can introduce significant variance in the optimization landscape.
 
 \begin{figure}[t]
 \begin{center}
 \includegraphics[width=0.9\linewidth]{figures/PSNR_comparison.png}
 \end{center}
-\caption{PSNR over training epochs. VAE (blue) achieves substantially higher PSNR with stable convergence. Flow Matching (orange) and Diffusion (green) show similar final performance, but Diffusion exhibits severe instability throughout training.}
+\caption{Validation PSNR over training epochs.}
 \label{fig:psnr}
 \end{figure}
 
@@ -205,7 +205,7 @@ Beyond final performance, the training curves reveal important differences in op
 \begin{center}
 \includegraphics[width=0.9\linewidth]{figures/SSIM_comparison.png}
 \end{center}
-\caption{SSIM over training epochs. All models achieve high structural similarity ($>$0.90), with VAE reaching the highest values. Diffusion shows characteristic instability while Flow Matching converges smoothly.}
+\caption{Validation SSIM over training epochs.}
 \label{fig:ssim}
 \end{figure}
 
@@ -213,7 +213,7 @@ Beyond final performance, the training curves reveal important differences in op
 \begin{center}
 \includegraphics[width=0.9\linewidth]{figures/MAE_comparison.png}
 \end{center}
-\caption{MAE over training epochs. Lower is better. VAE and Flow Matching converge to similar low error values with stable training. Diffusion exhibits dramatic spikes, particularly in early-to-mid training, with MAE occasionally exceeding 0.10.}
+\caption{Validation MAE over training epochs.}
 \label{fig:mae}
 \end{figure}
 
