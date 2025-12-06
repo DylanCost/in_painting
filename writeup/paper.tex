@@ -28,7 +28,7 @@ Paper under double-blind review}
 \maketitle
 
 \begin{abstract}
-Image inpainting, the task of reconstructing missing or corrupted regions in images, remains a fundamental challenge in computer vision. We present a systematic comparison of three generative paradigms for facial image inpainting: Diffusion Models, Variational Autoencoders (VAEs), and Flow Matching. To ensure a fair evaluation, we conduct all comparisons within a controlled experimental framework that uses a shared architecture, consistent training configurations, and standardized mask generation strategies on the CelebA dataset. Our experiments indicate that VAEs achieve the strongest overall reconstruction quality, while Flow Matching provides competitive performance with greater training stability. Diffusion models, despite their recent success in generative tasks, exhibit significant training instability in this constrained setting, suggesting they may require longer training horizons or additional architectural modifications for inpainting tasks.
+Image inpainting, the task of reconstructing missing or corrupted regions in images, remains a fundamental challenge in computer vision. We present a systematic comparison of three generative paradigms for facial image inpainting: Diffusion Models, Variational Autoencoders (VAEs), and Flow Matching. To ensure a fair evaluation, we conduct all comparisons within a controlled experimental framework that uses U-Net-style architectures with comparable parameter counts, consistent training configurations, and standardized mask generation strategies on the CelebA dataset. Under a fixed training budget, our experiments indicate that VAEs achieve the strongest overall reconstruction quality, while Flow Matching provides competitive performance with greater training stability than diffusion. Diffusion models, despite their recent success in generative tasks, exhibit significant training instability in this constrained setting, and we hypothesize that both diffusion and flow matching would benefit from expanded compute budgets (e.g., longer training horizons or larger architectures) for inpainting tasks.
 \end{abstract}
 
 \section{Introduction}
@@ -39,16 +39,9 @@ Among generative approaches, three paradigms have emerged as particularly influe
 
 Facial inpainting presents an ideal benchmark for comparing these approaches. Human faces exhibit strong structural regularities (symmetric features, consistent spatial relationships) while also requiring fine-grained texture synthesis (skin, hair, eyes). This combination of global coherence and local detail makes facial inpainting a discriminating test of generative model capabilities.
 
-Despite the proliferation of generative approaches, direct comparisons remain challenging due to architectural differences, varying training protocols, and inconsistent evaluation settings. Prior work typically optimizes each model class independently, making it difficult to isolate the contribution of the generative paradigm from confounding factors.
+Despite the proliferation of generative approaches, direct comparisons remain challenging due to architectural differences, varying training protocols, and inconsistent evaluation settings, which make it difficult to isolate the contribution of the generative paradigm from confounding factors.
 
-In this work, we address this gap through a controlled comparison of Diffusion Models, VAEs, and Flow Matching for facial inpainting. Our experimental design emphasizes fairness through several key decisions: (1) a shared U-Net backbone architecture across all models, (2) identical data preprocessing and mask generation procedures, (3) consistent training hyperparameters and compute budgets (100 epochs), and (4) evaluation on the same held-out test set using standard metrics.
-
-Our contributions are as follows:
-\begin{itemize}
-    \item We present the first systematic comparison of Diffusion, VAE, and Flow Matching paradigms for image inpainting under controlled experimental conditions.
-    \item We demonstrate that VAEs achieve superior reconstruction metrics (PSNR, SSIM, MAE) on facial inpainting when architectural and training factors are held constant.
-    \item We provide analysis of training dynamics, revealing that Diffusion models exhibit substantial instability in this setting, while Flow Matching offers a favorable stability-performance trade-off.
-\end{itemize}
+In this work, we perform a controlled comparison of Diffusion Models, VAEs, and Flow Matching for facial inpainting. Our experimental design emphasizes fairness through several key decisions: (1) closely matched U-Net-style architectures with similar parameter counts across all models, albeit while still retaining some non-trivial architectural differences such as additional attention blocks in the VAE, (2) identical data preprocessing and mask generation procedures, (3) consistent training hyperparameters and compute budgets (100 epochs), and (4) evaluation on the same held-out test set using standard metrics.
 
 \section{Dataset}
 
@@ -86,7 +79,7 @@ The U-Net architecture \citep{ronneberger2015u} employs an encoder-decoder struc
 
 \subsection{Shared Architecture and Training Setup}
 
-To isolate the effect of generative paradigm from architectural confounds, we employ a unified U-Net backbone across all three models. Our U-Net consists of four encoder and four decoder blocks with channel dimensions $[64, 128, 256, 512, 512]$. Each block contains two convolutional layers with GroupNorm and GELU activations. We incorporate self-attention at the $16\times16$ resolution level to capture long-range dependencies.
+To isolate the effect of generative paradigm from architectural confounds, we employ closely matched U-Net-style backbones with similar parameter counts across all three models. While the overall encoder-decoder structure is aligned, the VAE includes additional attention blocks that are not present in the diffusion or flow matching networks. Our U-Net consists of four encoder and four decoder blocks with channel dimensions $[64, 128, 256, 512, 512]$. Each block contains two convolutional layers with GroupNorm and GELU activations. We incorporate self-attention at the $16\times16$ resolution level to capture long-range dependencies.
 
 All models receive as input a 4-channel tensor: the 3-channel masked image (with zeros in masked regions) concatenated with a 1-channel binary mask indicating missing pixels. This conditioning strategy provides explicit information about which regions require reconstruction.
 
