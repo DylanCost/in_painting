@@ -4,22 +4,20 @@ so that there can be good qualitative analysis for the paper. This file is unnec
 for normal runs of the code.
 """
 
-import torch
-from torch.utils.data import DataLoader
 import os
 import sys
-import numpy as np
+
+import torch
 import torchvision.utils as vutils
-import matplotlib.pyplot as plt
+from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import Config, get_triptych_mask_specs
-from noise_scheduler_config import NoiseConfig
 from data.celeba_dataset import CelebADataset
-from unet_diffusion import UNetDiffusion, NoiseScheduler
-from masking.mask_generator import MaskGenerator
 from diffusion_evaluate import load_model, sample_ddpm
+from noise_scheduler_config import NoiseConfig
+from unet_diffusion import NoiseScheduler, UNetDiffusion
 
 
 def create_manual_masks(batch_size, height, width, device='cpu'):
@@ -42,7 +40,6 @@ def main():
     # Load config
     config = Config()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # print(f"Using device: {device}")
     
     # Create test dataset
     test_dataset = CelebADataset(

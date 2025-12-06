@@ -1,13 +1,24 @@
 """
-This file centralizes all the logic necessaary to do the training portion of the diffusion model if you
-just want to run the training portion. If you want to do the full evaluation use the pipeline.py file instead
+Diffusion Model Training Entry Point
+
+This module serves as the main entry point for training the diffusion-based image inpainting
+model in isolation, without running the full evaluation pipeline. It orchestrates the complete
+training workflow by initializing all necessary components (model, datasets, schedulers, loss
+functions), configuring the trainer, and executing the training loop with validation.
+
+The script sets up both training and validation data loaders with CelebA dataset splits, creates
+random mask generators for training (to ensure model generalization across diverse mask patterns)
+and deterministic mask generators for validation (to enable consistent metric tracking across
+epochs). After training completes, it saves comprehensive results including per-epoch metrics
+in CSV format and best validation scores in a summary text file. For full end-to-end training
+plus test set evaluation, use pipeline.py instead.
 """
+
+import os
+import sys
 
 import torch
 from torch.utils.data import DataLoader
-import sys
-import os
-import numpy as np
 
 # Ensure the project root (the directory containing diffusion/, data/, etc.) is in sys.path
 project_root = os.path.dirname(os.path.abspath(__file__))  # e.g. .../in_paint_structure/diffusion
@@ -16,13 +27,13 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from config import Config
-from noise_scheduler_config import NoiseConfig
 from data.celeba_dataset import CelebADataset
-from unet_diffusion import UNetDiffusion, NoiseScheduler
 from diffusion_loss import DiffusionLoss
 from diffusion_trainer import DiffusionTrainer
 from masking.mask_generator import MaskGenerator
+from noise_scheduler_config import NoiseConfig
 from scripts.set_seed import set_seed
+from unet_diffusion import NoiseScheduler, UNetDiffusion
 
 
 def main():
@@ -95,9 +106,7 @@ def main():
         config=config,
         device=device,
         train_mask_generator=train_mask_generator,  # Random for training
-        val_mask_generator=val_mask_generator, # Deterministic for Validation
-        patience=10,
-        use_ema=False
+        val_mask_generator=val_mask_generator # Deterministic for Validation
     )
 
     # Start training

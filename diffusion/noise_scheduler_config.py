@@ -1,5 +1,13 @@
 """
-This file contains the noise scheduler parameters that are used.
+Noise Scheduler Configuration for Diffusion Models
+
+This module defines the NoiseConfig dataclass which centralizes all hyperparameters related
+to the noise scheduling process in diffusion models. It specifies the beta schedule parameters
+(num_timesteps, beta_start, beta_end, schedule_type) that control how noise is added during
+the forward diffusion process, the time embedding dimensionality used for temporal conditioning,
+and sampling parameters for inference. The configuration validates schedule_type to ensure only
+'linear' or 'cosine' schedules are used, and defaults num_inference_steps to match num_timesteps
+if not explicitly specified.
 """
 
 # diffusion_config.py

@@ -1,26 +1,73 @@
 """
-This file contains all the training logic for the diffusion model. The overall file for training
-will be diffusion_train.py. This file contains the training loop / validation function.
+Diffusion Model Training Loop and Validation Logic
+
+This module implements the DiffusionTrainer class which orchestrates the complete training
+and validation workflow for the diffusion-based image inpainting model. The trainer manages
+training epochs with random mask generation, timestep sampling, and noise prediction loss
+computation, while validation performs full DDPM sampling from complete noise to evaluate
+reconstruction quality via PSNR, SSIM, MSE, and MAE metrics. It handles optimizer configuration
+(AdamW with cosine annealing), gradient clipping, automated checkpointing of best and final
+models, comprehensive logging of per-epoch metrics, and periodic visual sample generation.
+This file is used by diffusion_train.py for standalone training workflows.
 """
 
 import os
-import torch
-import copy
-import torchvision.utils as vutils
+
 import numpy as np
 import pandas as pd
+import torch
+import torchvision.utils as vutils
 
-from evaluation.metrics import InpaintingMetrics
 from diffusion.diffusion_evaluate import sample_ddpm
+from evaluation.metrics import InpaintingMetrics
 
 class DiffusionTrainer:
     """
-    Trainer for diffusion inpainting model with optional Exponential Moving Average (EMA) stabilization.
+    Trainer for diffusion-based image inpainting with validation, checkpointing, and metric tracking.
+    
+    Manages the complete training workflow for the U-Net diffusion model, including training loops,
+    validation with DDPM sampling, checkpointing based on PSNR, learning rate scheduling, and
+    automated metric tracking. The trainer uses separate mask generators for training (random masks
+    for diverse patterns) and validation (deterministic masks for consistent metric comparison).
+    
+    Training Process:
+        1. For each batch: generate random masks, sample random timesteps, add noise to masked regions
+        2. Model predicts noise in masked areas, loss computed only on masked regions
+        3. Gradient clipping (max_norm=1.0) applied to prevent instability
+        4. AdamW optimizer with cosine annealing learning rate schedule
+    
+    Validation Process:
+        1. Generate deterministic masks based on filenames for reproducibility
+        2. Start from complete noise (t=T-1) in masked regions
+        3. Perform full DDPM sampling (1000 timesteps) to denoise
+        4. Compute PSNR, SSIM, MSE, MAE metrics on full images
+        5. Save visual comparisons every 20 epochs
+    
+    Outputs:
+        - Checkpoints: runs/diffusion/checkpoints/{diffusion_best_model.pt, diffusion_final_model.pt}
+        - Training log: runs/diffusion/diffusion_training_log.txt (per-epoch metrics)
+        - Visual samples: runs/diffusion/examples/samples_epoch_{N}.png (every 20 epochs)
+        - Metrics DataFrame: Returned from train() for CSV export
+    
+    Args:
+        model: UNetDiffusion model instance to train
+        train_loader: DataLoader for training set with 'image' and 'filename' keys
+        val_loader: DataLoader for validation set with 'image' and 'filename' keys
+        loss_fn: Loss function (typically DiffusionLoss computing MSE on masked regions)
+        noise_scheduler: NoiseScheduler instance defining forward diffusion process
+        config: Config object containing hyperparameters (epochs, lr, etc.)
+        device: torch.device for computation ('cuda' or 'cpu')
+        train_mask_generator: MaskGenerator for training (random masks)
+        val_mask_generator: MaskGenerator for validation (deterministic masks)
+    
+    Attributes:
+        optimizer: AdamW optimizer with lr from config, weight_decay=0.01
+        scheduler: CosineAnnealingLR with T_max=num_epochs, eta_min=1e-6
+        global_step: Training step counter (incremented per batch)
     """
 
     def __init__(self, model, train_loader, val_loader, loss_fn, noise_scheduler,
-                 config, device, train_mask_generator, val_mask_generator, patience,
-                 use_ema=False):
+                 config, device, train_mask_generator, val_mask_generator):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
@@ -30,8 +77,6 @@ class DiffusionTrainer:
         self.device = device
         self.train_mask_generator = train_mask_generator
         self.val_mask_generator = val_mask_generator
-        self.patience = patience
-        self.use_ema = use_ema  # 👈 flag controls EMA usage
 
         # Optimizer
         self.optimizer = torch.optim.AdamW(
@@ -59,6 +104,20 @@ class DiffusionTrainer:
     # Training epoch
     # -------------------------------------------------------------------------
     def train_epoch(self, epoch):
+        """
+        Execute one training epoch over the entire training dataset.
+        
+        For each batch: generates random masks, samples random timesteps, adds noise to
+        masked regions, predicts noise with the model, computes loss, and updates weights
+        via backpropagation with gradient clipping. Logs progress every 100 batches.
+        
+        Args:
+            epoch: Current epoch number (1-indexed) for logging
+        
+        Returns:
+            float: Average loss across all batches in the epoch
+        """
+
         self.model.train()  # ✓ Set model to training mode
         total_loss = 0.0    # ✓ Initialize loss accumulator
         
@@ -95,8 +154,6 @@ class DiffusionTrainer:
             # ✓ Clip gradients to prevent explosion
             self.optimizer.step()                        # ✓ Update weights
             
-            # self.update_ema()  # ✓ Update EMA model if enabled
-            
             total_loss += loss.item()  # ✓ Accumulate loss
             self.global_step += 1      # ✓ Increment global step counter
             
@@ -115,8 +172,19 @@ class DiffusionTrainer:
     @torch.no_grad()
     def validate(self, epoch):
         """
-        Run comprehensive evaluation on test set.
+        Run validation on a subset of the validation set using full DDPM sampling.
+        
+        Generates deterministic masks based on filenames, starts from complete noise (t=T-1),
+        performs 1000-step DDPM denoising, and computes PSNR, SSIM, MSE, MAE metrics on
+        full images. Saves visual comparisons every 20 epochs. Processes up to 16 batches.
+        
+        Args:
+            epoch: Current epoch number for logging and conditional visualization
+        
+        Returns:
+            dict: Summary statistics with keys 'psnr', 'ssim', 'mse', 'mae' (all averaged)
         """
+
         self.model.eval()
 
         # Go up one directory from diffusion/ to project root, then create runs/diffusion/examples
@@ -132,7 +200,7 @@ class DiffusionTrainer:
         all_mae = []
 
         for batch_idx, batch in enumerate(self.val_loader):
-            if batch_idx > 16:
+            if batch_idx > 16: # Only use 1024 images for each validation run
                 break
             images = batch['image'].to(self.device)
             filenames = batch['filename']
@@ -197,7 +265,18 @@ class DiffusionTrainer:
     # Training loop
     # -------------------------------------------------------------------------
     def train(self):
-        """Full training loop with early stopping and checkpointing."""
+        """
+        Execute the full training loop across all epochs with validation and checkpointing.
+        
+        Runs training and validation for the configured number of epochs, tracking metrics
+        (PSNR, SSIM, MSE, MAE) and saving the best model based on PSNR. Logs all metrics
+        to a text file, applies cosine learning rate scheduling, and saves both best and
+        final model checkpoints. Creates a DataFrame of per-epoch metrics for CSV export.
+        
+        Returns:
+            tuple: (all_psnr, all_ssim, all_mse, all_mae, metrics_df) containing lists of
+                per-epoch metrics and a pandas DataFrame for external logging
+        """
         best_psnr = float('-inf')
         all_psnr = []
         all_ssim = []
@@ -283,7 +362,7 @@ class DiffusionTrainer:
     # Checkpointing
     # -------------------------------------------------------------------------
     def save_checkpoint(self, epoch, filename):
-        """Save model and EMA state (if available) to runs/diffusion/checkpoints/."""
+        """Save model to runs/diffusion/checkpoints/."""
         # Go up one directory from diffusion/ to project root, then create runs/diffusion/checkpoints
         current_dir = os.path.dirname(os.path.abspath(__file__))
         checkpoint_dir = os.path.join(os.path.dirname(current_dir), "runs", "diffusion", "checkpoints")

@@ -5,7 +5,6 @@ within the masked portion of the image
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 class DiffusionLoss(nn.Module):
     """

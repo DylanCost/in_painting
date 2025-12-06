@@ -1,26 +1,45 @@
 """
-This file contains the logic for the reverse diffusion process in the sample_ddpm function.
-It also contains the logic for running evaluation of the trained model on the test set.
+Diffusion Model Evaluation and Reverse Sampling for Image Inpainting
+
+This module implements the reverse diffusion process (DDPM sampling) for generating inpainted
+images and provides comprehensive evaluation functionality for trained diffusion models. The core
+sampling function performs iterative denoising from complete noise back to clean images, while
+the evaluation pipeline computes quantitative metrics and generates visual comparisons on test data.
+
+The reverse diffusion process follows the DDPM sampling equations, starting from x_T (pure noise
+in masked regions) and iteratively denoising through timesteps T-1, T-2, ..., 1, 0 using the
+model's learned noise predictions. At each step, the algorithm computes the posterior mean using
+the ε-parameterization and adds calibrated Gaussian noise (except at t=0). Known pixels outside
+the mask are preserved throughout sampling to ensure seamless blending between inpainted and
+original regions.
+
+Key functions include: (1) sample_ddpm - performs the complete reverse diffusion process given
+a noised input, returning the final denoised reconstruction; (2) run_evaluation - orchestrates
+comprehensive testing on the full test set, computing PSNR, SSIM, MSE, and MAE metrics while
+saving visualizations and detailed logs; (3) load_model - loads trained checkpoints from the
+standard checkpoint directory; (4) evaluate - main entry point that sets up datasets, model,
+and scheduler, then runs full evaluation with deterministic masks for reproducibility.
 """
 
 # diffusion_evaluate.py
-import torch
-from torch.utils.data import DataLoader
 import os
 import sys
-from tqdm import tqdm
+
 import numpy as np
+import torch
 import torchvision.utils as vutils
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import Config
-from noise_scheduler_config import NoiseConfig
 from data.celeba_dataset import CelebADataset
-from unet_diffusion import UNetDiffusion, NoiseScheduler
-from masking.mask_generator import MaskGenerator
 from evaluation.metrics import InpaintingMetrics
+from masking.mask_generator import MaskGenerator
+from noise_scheduler_config import NoiseConfig
 from scripts.set_seed import set_seed
+from unet_diffusion import NoiseScheduler, UNetDiffusion
 
 
 @torch.no_grad()
@@ -91,7 +110,7 @@ def sample_ddpm(model, scheduler, x_t, mask, num_timesteps=None):
     return x_t
 
 
-def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device, save_dir=None):
+def run_evaluation(model, test_loader, noise_scheduler, mask_generator, device):
     """
     Run comprehensive evaluation of diffusion model inpainting performance on test set.
     
@@ -332,8 +351,7 @@ def evaluate():
         test_loader=test_loader,
         noise_scheduler=noise_scheduler,
         mask_generator=mask_generator,
-        device=device,
-        save_dir='results/diffusion'
+        device=device
     )
     
     return results
