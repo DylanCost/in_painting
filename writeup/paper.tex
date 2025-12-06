@@ -165,8 +165,6 @@ All metrics are computed over the masked regions only, as unmasked pixels are tr
 
 \subsection{Quantitative Results}
 
-Table~\ref{tab:results} summarizes the final test set performance for each model. The VAE achieves the best performance across all metrics, with PSNR of 33.8 dB, SSIM of 0.961, and MAE of 0.015. Flow Matching attains competitive results with PSNR of 18.1 dB and SSIM of 0.943. The Diffusion model underperforms with PSNR of 17.9 dB, though it achieves similar SSIM to Flow Matching.
-
 \begin{table}[t]
 \caption{Test set performance comparison at epoch 100. Best results in bold.}
 \label{tab:results}
@@ -175,21 +173,21 @@ Table~\ref{tab:results} summarizes the final test set performance for each model
 \toprule
 \textbf{Model} & \textbf{PSNR (dB) $\uparrow$} & \textbf{SSIM $\uparrow$} & \textbf{MAE $\downarrow$} \\
 \midrule
-VAE & \textbf{33.8} & \textbf{0.961} & \textbf{0.015} \\
-Flow Matching & 18.1 & 0.943 & 0.017 \\
-Diffusion & 17.9 & 0.943 & 0.016 \\
+VAE & \textbf{25.57} & \textbf{0.636} & \textbf{0.103} \\
+Flow Matching & 18.1 & 0.541 & 0.148 \\
+Diffusion & 17.9 & 0.523 & 0.161 \\
 \bottomrule
 \end{tabular}
 \end{center}
 \end{table}
 
-In addition to these aggregate metrics, Appendix~\ref{sec:qualitative_examples} presents qualitative triptych examples for each model, with Flow Matching reconstructions illustrated in Figures~\ref{fig:fm_triptych_panel_01} and \ref{fig:fm_triptych_panel_02}.
+Table~\ref{tab:results} summarizes the final test set performance for each model. In addition to these aggregate metrics, Appendix~\ref{sec:qualitative_examples} presents qualitative triptych examples for each model, with Flow Matching reconstructions illustrated in Figures~\ref{fig:fm_triptych_panel_01} and \ref{fig:fm_triptych_panel_02}.
 
 \subsection{Training Dynamics}
 
 Beyond final performance, the training curves reveal important differences in optimization behavior (Figures~\ref{fig:psnr}, \ref{fig:ssim}, \ref{fig:mae}).
 
-\textbf{VAE} exhibits remarkably stable training with monotonically improving metrics throughout. PSNR increases smoothly from 29 dB to 34 dB, while SSIM converges to 0.96 with minimal variance. This stability reflects the well-behaved optimization landscape of the VAE objective.
+\textbf{VAE} exhibits remarkably stable training with monotonically improving metrics throughout. PSNR increases smoothly from 29 dB to 34 dB, while SSIM converges to 0.636 with minimal variance. This stability reflects the well-behaved optimization landscape of the VAE objective.
 
 \textbf{Flow Matching} also demonstrates stable training dynamics, with PSNR improving from 11 dB to 18 dB and SSIM from 0.89 to 0.94. The smooth convergence curves suggest that flow matching provides reliable gradients throughout training.
 
@@ -237,7 +235,7 @@ The instability of diffusion model training is particularly notable. The large m
 
 We presented a controlled comparison of three generative paradigms---Diffusion Models, Variational Autoencoders, and Flow Matching---for facial image inpainting on CelebA. By employing a shared U-Net architecture and identical training configurations, we isolated the contribution of the generative paradigm to inpainting performance.
 
-Our experiments reveal that VAEs substantially outperform both Diffusion and Flow Matching approaches under these conditions, achieving PSNR of 33.8 dB compared to approximately 18 dB for the alternatives. The VAE also exhibited superior training stability, converging smoothly over 100 epochs. Flow Matching demonstrated competitive performance with stable training dynamics, suggesting it as a promising middle ground. Diffusion models, despite their recent successes in generative tasks, exhibited significant training instability and underperformed in this constrained setting.
+Our experiments reveal that VAEs substantially outperform both Diffusion and Flow Matching approaches under these conditions, achieving PSNR of 25.57 dB compared to approximately 18 dB for the alternatives. The VAE also exhibited superior training stability, converging smoothly over 100 epochs. Flow Matching demonstrated competitive performance with stable training dynamics, suggesting it as a promising middle ground. Diffusion models, despite their recent successes in generative tasks, exhibited significant training instability and underperformed in this constrained setting.
 
 These findings should be interpreted within the scope of our experimental design. The 128$\times$128 resolution, 100-epoch training budget, and simple rectangular masks represent constrained conditions that may favor certain approaches. Diffusion models in particular may benefit from longer training, higher resolution, or more sophisticated conditioning mechanisms.
 
