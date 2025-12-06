@@ -273,8 +273,6 @@ Table~\ref{tab:hyperparams} summarizes the hyperparameters used across all exper
 \midrule
 Image resolution & 128$\times$128 \\
 Batch size & 64 \\
-Learning rate schedule & Model-specific cosine decay (see Table~\ref{tab:lr_schedules}) \\
-Optimizer & Adam/AdamW \\
 Training epochs & 100 \\
 Mask size range & [16, 64] pixels \\
 \midrule
@@ -282,15 +280,17 @@ Mask size range & [16, 64] pixels \\
 \midrule
 Diffusion steps $T$ & 1000 \\
 $\beta$ schedule & Linear ($10^{-4}$ to 0.02) \\
+Time embedding dimension & 256 \\
 \midrule
 \multicolumn{2}{c}{\textit{VAE-specific}} \\
 \midrule
-Latent dimension & 512 \\
+Latent dimension & 32 \\
 KL weight $\beta$ & 0.001 \\
 \midrule
 \multicolumn{2}{c}{\textit{Flow Matching-specific}} \\
 \midrule
 Integration steps & 100 \\
+Time embedding dimension & 256 \\
 \bottomrule
 \end{tabular}
 \end{center}
