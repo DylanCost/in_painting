@@ -48,7 +48,7 @@ In this work, we perform a controlled comparison of Diffusion Models, VAEs, and 
 
 \section{Related Work}
 
-Variational Autoencoders \citep{kingma2014auto, rezende2014stochastic} learn latent variable models through amortized variational inference. The encoder maps inputs to a distribution over latent codes, while the decoder generates outputs conditioned on sampled latents. Training maximizes a variational lower bound comprising reconstruction and KL-divergence terms. VAEs have been successfully applied to inpainting by conditioning on masked inputs and reconstructing complete images \citep{zheng2019pluralistic}.
+Variational Autoencoders \citep{kingma2014auto, rezende2014stochastic} learn latent variable models through amortized variational inference. The encoder maps inputs to a distribution over latent codes, while the decoder generates outputs conditioned on sampled latents. Training maximizes a variational lower bound comprising reconstruction and KL-divergence terms. VAEs have been successfully applied to inpainting by conditioning on masked inputs and reconstructing complete images, albeit with limited diversity in reconstructions \citep{zheng2019pluralistic}.
 
 Denoising Diffusion Probabilistic Models \citep{ho2020denoising, sohl2015deep} define a forward process that gradually corrupts data with Gaussian noise and learn a reverse process that iteratively denoises to recover clean samples. \citet{song2021scorebased} unified score-based and diffusion perspectives, while \citet{dhariwal2021diffusion} demonstrated that diffusion models can surpass GANs on image synthesis. For inpainting, diffusion models can be conditioned on unmasked regions through modified sampling procedures \citep{lugmayr2022repaint}.
 
@@ -118,7 +118,7 @@ Unlike diffusion and flow matching, the VAE produces reconstructions in a single
 
 \subsection{Flow Matching Implementation}
 
-Our flow matching implementation follows \citet{lipman2023flow}. We define an interpolation between source (Gaussian noise) and target (ground truth) distributions:
+Our flow matching implementation follows \citet{lipman2023flow} and \citet{liu2023flow}. We define an interpolation between source (Gaussian noise) and target (ground truth) distributions:
 \begin{equation}
     x_t = (1-t) \cdot \epsilon + t \cdot x_0, \quad t \in [0, 1]
 \end{equation}
