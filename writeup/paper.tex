@@ -86,11 +86,11 @@ The U-Net architecture \citep{ronneberger2015u} employs an encoder-decoder struc
 
 \subsection{Shared Architecture and Training Setup}
 
-To isolate the effect of generative paradigm from architectural confounds, we employ a unified U-Net backbone across all three models. Our U-Net consists of four encoder and four decoder blocks with channel dimensions $[64, 128, 256, 512]$. Each block contains two convolutional layers with GroupNorm and SiLU activations. We incorporate self-attention at the $16\times16$ resolution level to capture long-range dependencies.
+To isolate the effect of generative paradigm from architectural confounds, we employ a unified U-Net backbone across all three models. Our U-Net consists of four encoder and four decoder blocks with channel dimensions $[64, 128, 256, 512, 512]$. Each block contains two convolutional layers with GroupNorm and GELU activations. We incorporate self-attention at the $16\times16$ resolution level to capture long-range dependencies.
 
 All models receive as input a 4-channel tensor: the 3-channel masked image (with zeros in masked regions) concatenated with a 1-channel binary mask indicating missing pixels. This conditioning strategy provides explicit information about which regions require reconstruction.
 
-Training hyperparameters are held constant: Adam optimizer with learning rate $10^{-4}$, batch size 32, and 100 training epochs. We evaluate on the validation set every epoch and report metrics on the held-out test set using the best validation checkpoint.
+Training hyperparameters are held constant: Adam optimizer with learning rate $2 \times 10^{-4}$ (cosine annealed to $10^{-6}$), batch size 64, and 100 training epochs. We evaluate on the validation set every epoch and report metrics on the held-out test set using the best validation checkpoint.
 
 \subsection{Diffusion Model Implementation}
 
