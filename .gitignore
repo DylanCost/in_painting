@@ -4,8 +4,14 @@
 !*.py
 !*.ipynb
 !*.md
+!*.tex
+!*.sty
+!*.bst
+!*.bib
 !requirements.txt
 !.gitignore
+
+!writeup/figures/*.png
 
 !*/
 
