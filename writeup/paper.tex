@@ -149,21 +149,11 @@ To simulate realistic inpainting scenarios while maintaining experimental contro
 
 Critically, we generate a fixed set of mask-image pairs for evaluation, ensuring that all models are assessed on identical inpainting challenges. This eliminates variance due to mask sampling and enables direct comparison of reconstruction quality.
 
-\section{Experimental Results}\label{sec:experimental_results}
+\section{Results}\label{sec:experimental_results}
 
-\subsection{Evaluation Metrics}
 
-We evaluate reconstruction quality using three complementary metrics:
-
-\textbf{Peak Signal-to-Noise Ratio (PSNR)} measures pixel-wise reconstruction accuracy in decibels. Higher values indicate better reconstruction, with values above 30 dB generally considered high quality.
-
-\textbf{Structural Similarity Index (SSIM)} \citep{wang2004image} assesses perceptual similarity by comparing luminance, contrast, and structure. Values range from 0 to 1, with 1 indicating perfect similarity.
-
-\textbf{Mean Absolute Error (MAE)} computes the average absolute pixel difference. Lower values indicate better reconstruction.
-
+We evaluate reconstruction quality using Peak Signal-to-Noise Ratio (PSNR), Structural Similarity Index (SSIM), and Mean Absolute Error (MAE).
 All metrics are computed over the masked regions only, as unmasked pixels are trivially preserved.
-
-\subsection{Quantitative Results}
 
 \begin{table}[t]
 \caption{Test set performance comparison at epoch 100. Best results in bold.}
@@ -217,9 +207,9 @@ Beyond final performance, the training curves reveal important differences in op
 \label{fig:mae}
 \end{figure}
 
-\subsection{Analysis}
+\section{Discussion}
 
-The substantial performance gap between VAE and the other approaches warrants examination. We identify several contributing factors:
+The substantial performance gap between VAE and the other approaches warrants examination. We hypothesize several contributing factors:
 
 \textbf{Direct reconstruction objective.} The VAE directly optimizes reconstruction loss, whereas diffusion and flow matching learn auxiliary objectives (noise prediction and velocity regression) that indirectly enable generation. For the specific task of inpainting---where the goal is reconstruction rather than diverse sampling---direct optimization may be advantageous.
 
