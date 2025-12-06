@@ -245,13 +245,59 @@ These outcomes highlight an important practical message: for moderately sized fa
 \appendix
 \section{Implementation Details}
 
-\subsection{U-Net Architecture}
+\subsection{Differences between the U-Net variants}
 
-Our U-Net consists of an encoder and decoder with skip connections. The encoder contains four down-sampling blocks with channel dimensions [64, 128, 256, 512]. Each block applies two 3$\times$3 convolutions with GroupNorm (8 groups) and SiLU activation, followed by 2$\times$2 max pooling. Self-attention is applied at the 16$\times$16 resolution level.
+All three models share a 5-level U-Net backbone with channel progression
+$[64, 128, 256, 512, 512]$ and an input resolution of $128\times128$, but they
+are instantiated differently depending on the generative objective (flow
+matching, diffusion, or variational autoencoding). We summarize the key
+architectural differences below.
 
-The decoder mirrors the encoder with transposed convolutions for upsampling. Skip connections concatenate encoder features to decoder features at each resolution level. A final 1$\times$1 convolution produces the 3-channel output.
+\begin{enumerate}
+\item \emph{Flow-matching U-Net.}
+The flow-matching model uses a time-conditioned U-Net that directly predicts a
+3-channel velocity field on RGB space. The network takes a concatenated
+image--mask tensor with $4$ input channels (RGB $+$ binary mask) and a
+continuous flow time $t\in[0,1]$. Time is embedded by a sinusoidal
+positional encoder followed by an MLP, and the resulting vector is injected
+into every encoder and decoder block. Self-attention is applied only at a
+single intermediate resolution (default $16\times16$), selected by matching
+spatial resolution rather than layer depth, and mirrored at the corresponding
+decoder level. Skip connections are always enabled between encoder and
+decoder stages. The output is a full-frame $3$-channel velocity field; any
+restriction to the inpainted region is enforced by the flow-matching loss and
+ODE sampler rather than by masking the U-Net output.
 
-For diffusion and flow matching, we add sinusoidal timestep embeddings that modulate the network via FiLM layers. The VAE omits timestep conditioning.
+\item \emph{Diffusion U-Net.}
+The diffusion model employs a similar time-conditioned U-Net whose role is
+to predict the additive noise in the masked region during the denoising
+process. The configuration shared with the flow-matching model specifies
+$3$ RGB channels and hidden dimensions $[64,128,256,512,512]$, with self-attention
+again enabled only at the $16\times16$ scale and mirrored in the decoder.
+However, the diffusion U-Net is conditioned on \emph{integer} diffusion
+timesteps $t\in\{0,\dots,T-1\}$ via a sinusoidal embedding and small MLP, and
+it treats the inpainting mask in two distinct ways: (i) the binary mask is
+concatenated to the image as an additional input channel before the encoder,
+and (ii) the final $3$-channel noise prediction is multiplied by the mask
+(channel-wise), so that the network is explicitly constrained to predict
+non-zero noise only inside the inpaint region. Thus, unlike the flow-matching
+variant, the diffusion U-Net both conditions on the mask and hard-enforces it
+at the output.
+
+\item \emph{VAE U-Net.}
+The VAE inpainting model uses a U-Net-based variational autoencoder with the same 5-level
+encoder--decoder backbone but without any time or diffusion-step conditioning.
+The encoder consumes a masked image and an optional binary mask by
+concatenating them into a $(3{+}1)$-channel input; the mask therefore
+influences the latent representation but is \emph{not} provided to the
+decoder. The encoder outputs are flattened and projected into mean and
+log-variance vectors in a low-dimensional latent space (default dimension
+$32$), and the decoder reconstructs an RGB image from a sampled latent code,
+using U-Net skip connections (when enabled) and self-attention applied at the
+last two encoder stages and the mirrored first two decoder stages. The final
+reconstruction head applies a $\tanh$ nonlinearity, yielding a $3$-channel
+image in $[-1,1]$ without any explicit masking at the output.
+\end{enumerate}
 
 \subsection{Hyperparameters}
 
