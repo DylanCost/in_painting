@@ -15,17 +15,20 @@
 \title{A Comparative Study of Generative Models for \\Facial Image Inpainting: Diffusion, VAE, and Flow Matching}
 
 % Authors hidden for double-blind review
-\author{Dylan Costello, Noah Giles, Nicholas Cox \\
-Paper under double-blind review}
+\author{Dylan Costello, Noah Giles, Nicholas Cox}
 
 \newcommand{\fix}{\marginpar{FIX}}
 \newcommand{\new}{\marginpar{NEW}}
 
-%\iclrfinalcopy % Uncomment for camera-ready version
+\iclrfinalcopy % Uncomment for camera-ready version
 
 \begin{document}
 
 \maketitle
+
+% use a neutral header instead of the ICLR one
+\lhead{A Comparative Study of Generative Models for Facial Image Inpainting}
+
 
 \begin{abstract}
 Image inpainting, the task of reconstructing missing or corrupted regions in images, remains a fundamental challenge in computer vision. We present a systematic comparison of three generative paradigms for facial image inpainting: Diffusion Models, Variational Autoencoders (VAEs), and Flow Matching. To ensure a fair evaluation, we conduct all comparisons within a controlled experimental framework that uses U-Net-style architectures with comparable parameter counts, consistent training configurations, and standardized mask generation strategies on the CelebA dataset. Under a fixed training budget, our experiments indicate that VAEs achieve the strongest overall reconstruction quality, while Flow Matching provides competitive performance with greater training stability than diffusion. Diffusion models, despite their recent success in generative tasks, exhibit significant training instability in this constrained setting, and we hypothesize that both diffusion and flow matching would benefit from expanded compute budgets (e.g., longer training horizons or larger architectures) for inpainting tasks.
