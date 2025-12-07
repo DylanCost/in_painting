@@ -130,6 +130,15 @@ This VAE-based inpainting model uses a convolutional encoder–decoder architect
 
 The model is trained using a combination of reconstruction loss and KL divergence to ensure meaningful latent representations.
 
+### Model Architecture
+
+The VAE model architecture is defined in the [`models/`](models) directory:
+
+- [`unet_vae.py`](models/unet_vae.py) – U-Net based VAE implementation with encoder-decoder architecture, skip connections, and optional self-attention mechanisms
+- [`vae_loss.py`](models/vae_loss.py) – VAE loss function combining reconstruction loss and KL divergence
+
+The main training script is located at [`scripts/train.py`](scripts/train.py), which provides a command-line interface for training the VAE with various configuration options including pretrained encoders and transfer learning capabilities.
+
 ### Training
 
 You can train the VAE either via a script or an interactive notebook:
