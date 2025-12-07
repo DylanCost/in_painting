@@ -103,7 +103,7 @@ where $z \sim \mathcal{N}(0, \mathbf{I})$ for $t > 1$ and $z = 0$ for $t = 1$, $
 
 \subsection{VAE Implementation}
 
-Our VAE adapts the U-Net backbone into an encoder-decoder structure with a latent bottleneck. The encoder maps the concatenated masked image and mask to mean $\mu$ and log-variance $\log\sigma^2$ vectors of dimension 512. We apply the reparameterization trick to sample latent codes:
+Our VAE adapts the U-Net backbone into an encoder-decoder structure with a latent bottleneck. The encoder maps the concatenated masked image and mask to mean $\mu$ and log-variance $\log\sigma^2$ vectors of dimension 32. We apply the reparameterization trick to sample latent codes:
 \begin{equation}
     z = \mu + \sigma \odot \epsilon, \quad \epsilon \sim \mathcal{N}(0, \mathbf{I})
 \end{equation}
@@ -156,7 +156,7 @@ We evaluate reconstruction quality using Peak Signal-to-Noise Ratio (PSNR), Stru
 All metrics are computed over the masked regions only, as unmasked pixels are trivially preserved.
 
 \begin{table}[t]
-\caption{Test set performance comparison at epoch 100. Best results in bold.}
+\caption{Test set performance of best checkpoints at epoch 100. Best results in bold.}
 \label{tab:results}
 \begin{center}
 \begin{tabular}{lccc}
