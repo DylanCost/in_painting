@@ -64,7 +64,7 @@ To reduce architectural confounds, we base all three models on U-Net-style encod
 
 All models receive as input a 4-channel tensor: the 3-channel masked image (with zeros in masked regions) concatenated with a 1-channel binary mask indicating missing pixels. This conditioning strategy provides explicit information about which regions require reconstruction.
 
-We keep most high-level training settings aligned across models: all experiments use a batch size of 64, are run for 100 epochs, and are evaluated on the validation set every epoch, reporting test-set metrics for the best validation checkpoint. However, the precise optimizer settings and learning rate schedules differ between paradigms; Table~\ref{tab:lr_schedules} summarizes the starting and ending learning rates and warmup policies for each model.
+We keep most high-level training settings aligned across models: all experiments use a batch size of 64, are run for 100 epochs, and are evaluated on the validation set every epoch, reporting test-set metrics for the best validation checkpoint. Table~\ref{tab:lr_schedules} summarizes the starting and ending learning rates and warmup policies for each model.
 
 \begin{table}[t]
 \centering
