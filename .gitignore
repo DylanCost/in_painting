@@ -21,3 +21,5 @@ scratch/
 assets/
 results/
 weights/
+
+!runs/flowmatching/20251204_150431/*
