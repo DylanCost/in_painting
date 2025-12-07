@@ -18,7 +18,7 @@ The following modules are shared between models:
 
 ## Flowmatching Pipeline
 
-The flowmatching pipeline can be run via
+The flowmatching implementation is contained under `flowmatching/`. The flowmatching pipeline can be run via
 
 ```
 python -m flowmatching.pipeline --epochs 100 --batch_size 64 --num_eval_samples 1024 --num_example_images 8
