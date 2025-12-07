@@ -60,7 +60,7 @@ The U-Net architecture \citep{ronneberger2015u} employs an encoder-decoder struc
 
 \subsection{Shared Architecture and Training Setup}
 
-To reduce architectural confounds, we base all three models on U-Net-style encoder--decoder backbones with the same depth and channel layout, though we do not enforce a perfectly identical implementation across paradigms. Each network uses a series of encoder and decoder blocks with channel dimensions $[64, 128, 256, 512, 512]$, with two convolutional layers per block, GroupNorm, GELU activations, and skip connections. The placement and use of attention blocks is not fully shared: the flowmatching and diffusion implementations include one attention block in the encoder and decoder components, while the VAE additionally applies attention at multiple resolution levels.
+To reduce architectural confounds, we base all three models on U-Net-style encoder--decoder backbones with the same depth and channel layout, though we do not enforce a perfectly identical implementation across paradigms. Each network uses a series of encoder and decoder blocks with channel dimensions $[64, 128, 256, 512, 512]$, with two convolutional layers per block, BatchNorm, GELU activations, and skip connections. The placement and use of attention blocks is not fully shared: the flowmatching and diffusion implementations include one attention block in the encoder and decoder components, while the VAE additionally applies attention at multiple resolution levels.
 
 All models receive as input a 4-channel tensor: the 3-channel masked image (with zeros in masked regions) concatenated with a 1-channel binary mask indicating missing pixels. This conditioning strategy provides explicit information about which regions require reconstruction.
 
