@@ -1,0 +1,707 @@
+Training Log
+============================================================
+
+Epoch 1/100
+Train Loss: 0.0705
+Validation PSNR: 9.7267
+Validation SSIM: 0.1682
+Validation MSE: 0.048517
+Validation MAE: 0.348411
+
+Epoch 2/100
+Train Loss: 0.0346
+Validation PSNR: 0.7539
+Validation SSIM: 0.0085
+Validation MSE: 0.328076
+Validation MAE: 1.649065
+
+Epoch 3/100
+Train Loss: 0.0281
+Validation PSNR: 4.4831
+Validation SSIM: 0.0463
+Validation MSE: 0.139165
+Validation MAE: 1.008293
+
+Epoch 4/100
+Train Loss: 0.0252
+Validation PSNR: 14.0493
+Validation SSIM: 0.3105
+Validation MSE: 0.015432
+Validation MAE: 0.274771
+
+Epoch 5/100
+Train Loss: 0.0238
+Validation PSNR: 11.0405
+Validation SSIM: 0.2452
+Validation MSE: 0.031157
+Validation MAE: 0.398637
+
+Epoch 6/100
+Train Loss: 0.0222
+Validation PSNR: 12.3000
+Validation SSIM: 0.2889
+Validation MSE: 0.023097
+Validation MAE: 0.342920
+
+Epoch 7/100
+Train Loss: 0.0213
+Validation PSNR: 9.1363
+Validation SSIM: 0.1995
+Validation MSE: 0.048120
+Validation MAE: 0.528884
+
+Epoch 8/100
+Train Loss: 0.0205
+Validation PSNR: 4.4420
+Validation SSIM: 0.0724
+Validation MSE: 0.140640
+Validation MAE: 0.970485
+
+Epoch 9/100
+Train Loss: 0.0199
+Validation PSNR: 8.6301
+Validation SSIM: 0.2008
+Validation MSE: 0.053638
+Validation MAE: 0.551512
+
+Epoch 10/100
+Train Loss: 0.0196
+Validation PSNR: 12.1937
+Validation SSIM: 0.2881
+Validation MSE: 0.023586
+Validation MAE: 0.348544
+
+Epoch 11/100
+Train Loss: 0.0194
+Validation PSNR: 16.6384
+Validation SSIM: 0.4386
+Validation MSE: 0.008512
+Validation MAE: 0.192309
+
+Epoch 12/100
+Train Loss: 0.0188
+Validation PSNR: 6.1322
+Validation SSIM: 0.1180
+Validation MSE: 0.095428
+Validation MAE: 0.781067
+
+Epoch 13/100
+Train Loss: 0.0186
+Validation PSNR: 10.0713
+Validation SSIM: 0.2568
+Validation MSE: 0.038880
+Validation MAE: 0.452397
+
+Epoch 14/100
+Train Loss: 0.0184
+Validation PSNR: 13.2830
+Validation SSIM: 0.3508
+Validation MSE: 0.018395
+Validation MAE: 0.288511
+
+Epoch 15/100
+Train Loss: 0.0180
+Validation PSNR: 7.0690
+Validation SSIM: 0.1521
+Validation MSE: 0.076905
+Validation MAE: 0.663607
+
+Epoch 16/100
+Train Loss: 0.0181
+Validation PSNR: 16.8522
+Validation SSIM: 0.4236
+Validation MSE: 0.008099
+Validation MAE: 0.189838
+
+Epoch 17/100
+Train Loss: 0.0176
+Validation PSNR: 6.6893
+Validation SSIM: 0.1729
+Validation MSE: 0.083893
+Validation MAE: 0.672140
+
+Epoch 18/100
+Train Loss: 0.0172
+Validation PSNR: 12.8364
+Validation SSIM: 0.3278
+Validation MSE: 0.020520
+Validation MAE: 0.305166
+
+Epoch 19/100
+Train Loss: 0.0175
+Validation PSNR: 6.9755
+Validation SSIM: 0.1319
+Validation MSE: 0.078604
+Validation MAE: 0.688020
+
+Epoch 20/100
+Train Loss: 0.0174
+Validation PSNR: 16.1091
+Validation SSIM: 0.4585
+Validation MSE: 0.009614
+Validation MAE: 0.204357
+
+Epoch 21/100
+Train Loss: 0.0172
+Validation PSNR: 11.6259
+Validation SSIM: 0.3055
+Validation MSE: 0.027037
+Validation MAE: 0.360224
+
+Epoch 22/100
+Train Loss: 0.0169
+Validation PSNR: 12.7151
+Validation SSIM: 0.3299
+Validation MSE: 0.021069
+Validation MAE: 0.321467
+
+Epoch 23/100
+Train Loss: 0.0169
+Validation PSNR: 16.0690
+Validation SSIM: 0.3922
+Validation MSE: 0.009737
+Validation MAE: 0.213406
+
+Epoch 24/100
+Train Loss: 0.0167
+Validation PSNR: 11.0627
+Validation SSIM: 0.2637
+Validation MSE: 0.030654
+Validation MAE: 0.392279
+
+Epoch 25/100
+Train Loss: 0.0165
+Validation PSNR: 11.3722
+Validation SSIM: 0.3038
+Validation MSE: 0.028907
+Validation MAE: 0.376928
+
+Epoch 26/100
+Train Loss: 0.0164
+Validation PSNR: 13.2578
+Validation SSIM: 0.3678
+Validation MSE: 0.018567
+Validation MAE: 0.287295
+
+Epoch 27/100
+Train Loss: 0.0162
+Validation PSNR: 15.5396
+Validation SSIM: 0.3910
+Validation MSE: 0.010899
+Validation MAE: 0.223845
+
+Epoch 28/100
+Train Loss: 0.0164
+Validation PSNR: 15.8035
+Validation SSIM: 0.4445
+Validation MSE: 0.010290
+Validation MAE: 0.209105
+
+Epoch 29/100
+Train Loss: 0.0164
+Validation PSNR: 14.6766
+Validation SSIM: 0.4045
+Validation MSE: 0.013400
+Validation MAE: 0.243483
+
+Epoch 30/100
+Train Loss: 0.0163
+Validation PSNR: 6.9154
+Validation SSIM: 0.1381
+Validation MSE: 0.079980
+Validation MAE: 0.713200
+
+Epoch 31/100
+Train Loss: 0.0162
+Validation PSNR: 16.5107
+Validation SSIM: 0.4596
+Validation MSE: 0.008745
+Validation MAE: 0.189905
+
+Epoch 32/100
+Train Loss: 0.0161
+Validation PSNR: 15.5604
+Validation SSIM: 0.3992
+Validation MSE: 0.010872
+Validation MAE: 0.235495
+
+Epoch 33/100
+Train Loss: 0.0157
+Validation PSNR: 16.9426
+Validation SSIM: 0.4581
+Validation MSE: 0.007924
+Validation MAE: 0.181169
+
+Epoch 34/100
+Train Loss: 0.0160
+Validation PSNR: 16.4360
+Validation SSIM: 0.4599
+Validation MSE: 0.008867
+Validation MAE: 0.198382
+
+Epoch 35/100
+Train Loss: 0.0160
+Validation PSNR: 11.0142
+Validation SSIM: 0.3143
+Validation MSE: 0.031152
+Validation MAE: 0.376028
+
+Epoch 36/100
+Train Loss: 0.0158
+Validation PSNR: 11.5160
+Validation SSIM: 0.3163
+Validation MSE: 0.027877
+Validation MAE: 0.379219
+
+Epoch 37/100
+Train Loss: 0.0154
+Validation PSNR: 16.3575
+Validation SSIM: 0.4533
+Validation MSE: 0.009086
+Validation MAE: 0.197942
+
+Epoch 38/100
+Train Loss: 0.0154
+Validation PSNR: 16.9150
+Validation SSIM: 0.4731
+Validation MSE: 0.007953
+Validation MAE: 0.180030
+
+Epoch 39/100
+Train Loss: 0.0155
+Validation PSNR: 16.6461
+Validation SSIM: 0.4458
+Validation MSE: 0.008514
+Validation MAE: 0.188768
+
+Epoch 40/100
+Train Loss: 0.0154
+Validation PSNR: 13.0652
+Validation SSIM: 0.4015
+Validation MSE: 0.019538
+Validation MAE: 0.286476
+
+Epoch 41/100
+Train Loss: 0.0156
+Validation PSNR: 16.3831
+Validation SSIM: 0.4638
+Validation MSE: 0.009001
+Validation MAE: 0.200597
+
+Epoch 42/100
+Train Loss: 0.0153
+Validation PSNR: 16.3340
+Validation SSIM: 0.4364
+Validation MSE: 0.009097
+Validation MAE: 0.201668
+
+Epoch 43/100
+Train Loss: 0.0152
+Validation PSNR: 16.3008
+Validation SSIM: 0.4305
+Validation MSE: 0.009181
+Validation MAE: 0.198865
+
+Epoch 44/100
+Train Loss: 0.0152
+Validation PSNR: 16.2419
+Validation SSIM: 0.4550
+Validation MSE: 0.009291
+Validation MAE: 0.198786
+
+Epoch 45/100
+Train Loss: 0.0151
+Validation PSNR: 17.3453
+Validation SSIM: 0.4950
+Validation MSE: 0.007222
+Validation MAE: 0.170535
+
+Epoch 46/100
+Train Loss: 0.0152
+Validation PSNR: 16.9937
+Validation SSIM: 0.4795
+Validation MSE: 0.007887
+Validation MAE: 0.176015
+
+Epoch 47/100
+Train Loss: 0.0152
+Validation PSNR: 17.3318
+Validation SSIM: 0.4828
+Validation MSE: 0.007250
+Validation MAE: 0.172112
+
+Epoch 48/100
+Train Loss: 0.0151
+Validation PSNR: 16.6881
+Validation SSIM: 0.4502
+Validation MSE: 0.008383
+Validation MAE: 0.190963
+
+Epoch 49/100
+Train Loss: 0.0149
+Validation PSNR: 7.0609
+Validation SSIM: 0.1782
+Validation MSE: 0.077202
+Validation MAE: 0.666333
+
+Epoch 50/100
+Train Loss: 0.0150
+Validation PSNR: 15.0347
+Validation SSIM: 0.4477
+Validation MSE: 0.012346
+Validation MAE: 0.224103
+
+Epoch 51/100
+Train Loss: 0.0148
+Validation PSNR: 16.7302
+Validation SSIM: 0.4677
+Validation MSE: 0.008310
+Validation MAE: 0.181622
+
+Epoch 52/100
+Train Loss: 0.0146
+Validation PSNR: 15.8261
+Validation SSIM: 0.4422
+Validation MSE: 0.010217
+Validation MAE: 0.205099
+
+Epoch 53/100
+Train Loss: 0.0149
+Validation PSNR: 16.1141
+Validation SSIM: 0.4013
+Validation MSE: 0.009574
+Validation MAE: 0.204873
+
+Epoch 54/100
+Train Loss: 0.0149
+Validation PSNR: 17.4004
+Validation SSIM: 0.4712
+Validation MSE: 0.007107
+Validation MAE: 0.172551
+
+Epoch 55/100
+Train Loss: 0.0146
+Validation PSNR: 16.0571
+Validation SSIM: 0.4385
+Validation MSE: 0.009699
+Validation MAE: 0.205749
+
+Epoch 56/100
+Train Loss: 0.0146
+Validation PSNR: 14.9447
+Validation SSIM: 0.4511
+Validation MSE: 0.012592
+Validation MAE: 0.223715
+
+Epoch 57/100
+Train Loss: 0.0147
+Validation PSNR: 16.1626
+Validation SSIM: 0.4602
+Validation MSE: 0.009522
+Validation MAE: 0.202485
+
+Epoch 58/100
+Train Loss: 0.0146
+Validation PSNR: 16.1488
+Validation SSIM: 0.4577
+Validation MSE: 0.009548
+Validation MAE: 0.200006
+
+Epoch 59/100
+Train Loss: 0.0146
+Validation PSNR: 16.2133
+Validation SSIM: 0.4691
+Validation MSE: 0.009366
+Validation MAE: 0.194830
+
+Epoch 60/100
+Train Loss: 0.0143
+Validation PSNR: 7.4918
+Validation SSIM: 0.1877
+Validation MSE: 0.069920
+Validation MAE: 0.625907
+
+Epoch 61/100
+Train Loss: 0.0145
+Validation PSNR: 16.4410
+Validation SSIM: 0.4628
+Validation MSE: 0.008872
+Validation MAE: 0.196651
+
+Epoch 62/100
+Train Loss: 0.0145
+Validation PSNR: 17.5406
+Validation SSIM: 0.4903
+Validation MSE: 0.006886
+Validation MAE: 0.166254
+
+Epoch 63/100
+Train Loss: 0.0143
+Validation PSNR: 17.0921
+Validation SSIM: 0.4982
+Validation MSE: 0.007687
+Validation MAE: 0.171260
+
+Epoch 64/100
+Train Loss: 0.0144
+Validation PSNR: 15.4554
+Validation SSIM: 0.4312
+Validation MSE: 0.011153
+Validation MAE: 0.223454
+
+Epoch 65/100
+Train Loss: 0.0144
+Validation PSNR: 16.5113
+Validation SSIM: 0.4716
+Validation MSE: 0.008743
+Validation MAE: 0.191624
+
+Epoch 66/100
+Train Loss: 0.0142
+Validation PSNR: 16.9521
+Validation SSIM: 0.4872
+Validation MSE: 0.007887
+Validation MAE: 0.178688
+
+Epoch 67/100
+Train Loss: 0.0142
+Validation PSNR: 17.3728
+Validation SSIM: 0.4906
+Validation MSE: 0.007180
+Validation MAE: 0.171637
+
+Epoch 68/100
+Train Loss: 0.0140
+Validation PSNR: 17.2481
+Validation SSIM: 0.5063
+Validation MSE: 0.007387
+Validation MAE: 0.169997
+
+Epoch 69/100
+Train Loss: 0.0142
+Validation PSNR: 16.6841
+Validation SSIM: 0.4739
+Validation MSE: 0.008390
+Validation MAE: 0.186344
+
+Epoch 70/100
+Train Loss: 0.0141
+Validation PSNR: 17.6294
+Validation SSIM: 0.5018
+Validation MSE: 0.006772
+Validation MAE: 0.168559
+
+Epoch 71/100
+Train Loss: 0.0140
+Validation PSNR: 17.7531
+Validation SSIM: 0.5104
+Validation MSE: 0.006597
+Validation MAE: 0.161729
+
+Epoch 72/100
+Train Loss: 0.0141
+Validation PSNR: 16.4183
+Validation SSIM: 0.4860
+Validation MSE: 0.008967
+Validation MAE: 0.187099
+
+Epoch 73/100
+Train Loss: 0.0139
+Validation PSNR: 17.4164
+Validation SSIM: 0.4931
+Validation MSE: 0.007071
+Validation MAE: 0.171284
+
+Epoch 74/100
+Train Loss: 0.0140
+Validation PSNR: 14.2267
+Validation SSIM: 0.4242
+Validation MSE: 0.014886
+Validation MAE: 0.250282
+
+Epoch 75/100
+Train Loss: 0.0138
+Validation PSNR: 17.7298
+Validation SSIM: 0.5111
+Validation MSE: 0.006612
+Validation MAE: 0.160893
+
+Epoch 76/100
+Train Loss: 0.0139
+Validation PSNR: 17.9867
+Validation SSIM: 0.5185
+Validation MSE: 0.006225
+Validation MAE: 0.156188
+
+Epoch 77/100
+Train Loss: 0.0139
+Validation PSNR: 17.6905
+Validation SSIM: 0.5219
+Validation MSE: 0.006661
+Validation MAE: 0.161317
+
+Epoch 78/100
+Train Loss: 0.0138
+Validation PSNR: 16.4704
+Validation SSIM: 0.4978
+Validation MSE: 0.008886
+Validation MAE: 0.186533
+
+Epoch 79/100
+Train Loss: 0.0138
+Validation PSNR: 17.9205
+Validation SSIM: 0.5212
+Validation MSE: 0.006307
+Validation MAE: 0.155746
+
+Epoch 80/100
+Train Loss: 0.0138
+Validation PSNR: 16.0394
+Validation SSIM: 0.4598
+Validation MSE: 0.009733
+Validation MAE: 0.201419
+
+Epoch 81/100
+Train Loss: 0.0140
+Validation PSNR: 17.9583
+Validation SSIM: 0.5369
+Validation MSE: 0.006254
+Validation MAE: 0.154117
+
+Epoch 82/100
+Train Loss: 0.0137
+Validation PSNR: 17.9155
+Validation SSIM: 0.5284
+Validation MSE: 0.006311
+Validation MAE: 0.155037
+
+Epoch 83/100
+Train Loss: 0.0137
+Validation PSNR: 17.4227
+Validation SSIM: 0.5125
+Validation MSE: 0.007092
+Validation MAE: 0.168185
+
+Epoch 84/100
+Train Loss: 0.0137
+Validation PSNR: 17.9910
+Validation SSIM: 0.5305
+Validation MSE: 0.006202
+Validation MAE: 0.153429
+
+Epoch 85/100
+Train Loss: 0.0136
+Validation PSNR: 18.1073
+Validation SSIM: 0.5328
+Validation MSE: 0.006058
+Validation MAE: 0.152920
+
+Epoch 86/100
+Train Loss: 0.0136
+Validation PSNR: 18.2654
+Validation SSIM: 0.5302
+Validation MSE: 0.005840
+Validation MAE: 0.150364
+
+Epoch 87/100
+Train Loss: 0.0135
+Validation PSNR: 17.7785
+Validation SSIM: 0.5202
+Validation MSE: 0.006514
+Validation MAE: 0.157348
+
+Epoch 88/100
+Train Loss: 0.0134
+Validation PSNR: 17.1293
+Validation SSIM: 0.5075
+Validation MSE: 0.007578
+Validation MAE: 0.171004
+
+Epoch 89/100
+Train Loss: 0.0135
+Validation PSNR: 17.6455
+Validation SSIM: 0.5189
+Validation MSE: 0.006727
+Validation MAE: 0.159947
+
+Epoch 90/100
+Train Loss: 0.0136
+Validation PSNR: 18.0965
+Validation SSIM: 0.5341
+Validation MSE: 0.006074
+Validation MAE: 0.152124
+
+Epoch 91/100
+Train Loss: 0.0134
+Validation PSNR: 17.6572
+Validation SSIM: 0.5208
+Validation MSE: 0.006701
+Validation MAE: 0.160030
+
+Epoch 92/100
+Train Loss: 0.0135
+Validation PSNR: 17.9212
+Validation SSIM: 0.5272
+Validation MSE: 0.006323
+Validation MAE: 0.154696
+
+Epoch 93/100
+Train Loss: 0.0135
+Validation PSNR: 17.8413
+Validation SSIM: 0.5294
+Validation MSE: 0.006431
+Validation MAE: 0.155287
+
+Epoch 94/100
+Train Loss: 0.0137
+Validation PSNR: 17.8771
+Validation SSIM: 0.5307
+Validation MSE: 0.006375
+Validation MAE: 0.155011
+
+Epoch 95/100
+Train Loss: 0.0138
+Validation PSNR: 17.9597
+Validation SSIM: 0.5290
+Validation MSE: 0.006256
+Validation MAE: 0.154649
+
+Epoch 96/100
+Train Loss: 0.0135
+Validation PSNR: 18.0925
+Validation SSIM: 0.5328
+Validation MSE: 0.006075
+Validation MAE: 0.152113
+
+Epoch 97/100
+Train Loss: 0.0134
+Validation PSNR: 17.9883
+Validation SSIM: 0.5322
+Validation MSE: 0.006226
+Validation MAE: 0.152849
+
+Epoch 98/100
+Train Loss: 0.0134
+Validation PSNR: 17.9408
+Validation SSIM: 0.5302
+Validation MSE: 0.006282
+Validation MAE: 0.154145
+
+Epoch 99/100
+Train Loss: 0.0135
+Validation PSNR: 17.8958
+Validation SSIM: 0.5289
+Validation MSE: 0.006344
+Validation MAE: 0.154401
+
+Epoch 100/100
+Train Loss: 0.0135
+Validation PSNR: 17.9328
+Validation SSIM: 0.5292
+Validation MSE: 0.006297
+Validation MAE: 0.154872
+
+
+============================================================
+Training complete — Best PSNR: 18.2654
+============================================================

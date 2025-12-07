@@ -23,3 +23,9 @@ results/
 weights/
 
 !runs/flowmatching/20251204_150431/*
+
+!runs/diffusion/best_diffusion_metrics.txt
+!runs/diffusion/best_test_metrics.txt
+!runs/diffusion/diffusion_data.csv
+!runs/diffusion/diffusion_testing_log.txt
+!runs/diffusion/diffusion_training_log.txt

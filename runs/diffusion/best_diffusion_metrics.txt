@@ -1,0 +1,7 @@
+Best Validation Metrics
+========================================
+
+Highest PSNR: 18.2654
+Highest SSIM: 0.5369
+Lowest MSE:   0.005840
+Lowest MAE:   0.150364
