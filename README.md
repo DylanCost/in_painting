@@ -8,7 +8,7 @@ This repository contains multiple approaches to image inpainting on the CelebA d
 ## Team Member Roles
 - **Noah**: Implemented Flowmatching model and pipeline
 - **Nicholas**: Implemented Diffusion model and pipeline
-- **Jake**: Implemented VAE model and pipeline
+- **Dylan**: Implemented VAE model and pipeline
 
 All team members contributed to the report.
 
