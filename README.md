@@ -5,6 +5,13 @@ This repository contains multiple approaches to image inpainting on the CelebA d
 - a diffusion-based pipeline,
 - and a convolutional VAE baseline for masked-face reconstruction.
 
+## Team Member Roles
+- **Noah**: Implemented Flowmatching model and pipeline
+- **Nicholas**: Implemented Diffusion model and pipeline
+- **Jake**: Implemented VAE model and pipeline
+
+All team members contributed to the report.
+
 ## Requirements
 
 Install dependencies via:
@@ -194,12 +201,3 @@ with torch.no_grad():
     reconstructed = model(masked_image)
     inpainted = image * (1 - mask) + reconstructed * mask
 ```
-
-### License
-
-See the repository license for usage terms.
-
-### Acknowledgments
-
-- [CelebA Dataset](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html) by MMLAB, CUHK.
-- PyTorch VAE implementations community.
