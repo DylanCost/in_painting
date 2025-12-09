@@ -171,7 +171,7 @@ Diffusion & 17.9 & 0.523 & 0.161 \\
 \end{center}
 \end{table}
 
-Table~\ref{tab:results} summarizes the final test set performance for each model. In addition to these aggregate metrics, Appendix~\ref{sec:qualitative_examples} presents qualitative triptych examples for each model, with Flow Matching reconstructions illustrated in Figures~\ref{fig:fm_triptych_panel_01} and \ref{fig:fm_triptych_panel_02}. Diffusion reconstructions are illustrated in  Figures~\ref{fig:diff_triptych_panel_01} and \ref{fig:diff_triptych_panel_02}.
+Table~\ref{tab:results} summarizes the final test set performance for each model. In addition to these aggregate metrics, Appendix~\ref{sec:qualitative_examples} presents qualitative triptych examples for each model, with Flow Matching reconstructions illustrated in Figures~\ref{fig:fm_triptych_panel_01} and \ref{fig:fm_triptych_panel_02}, Diffusion reconstructions in Figures~\ref{fig:diff_triptych_panel_01} and \ref{fig:diff_triptych_panel_02}, and VAE reconstructions in Figures~\ref{fig:vae_triptych_panel_01} and \ref{fig:vae_triptych_panel_02}.
 
 \subsection{Training Dynamics}
 
@@ -362,5 +362,22 @@ To complement the quantitative results in Section~\ref{sec:experimental_results}
 \caption{Qualitative inpainting examples from the Diffusion model (panel 2)}
 \label{fig:diff_triptych_panel_02}
 \end{figure}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=\linewidth]{figures/vae_triptych_panel_01.png}
+\end{center}
+\caption{Qualitative inpainting examples from the VAE model (panel 1). Each triptych shows the ground-truth target (top), masked input (middle), and VAE reconstruction (bottom).}
+\label{fig:vae_triptych_panel_01}
+\end{figure}
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=\linewidth]{figures/vae_triptych_panel_02.png}
+\end{center}
+\caption{Qualitative inpainting examples from the VAE model (panel 2), demonstrating reconstruction quality across different facial regions and mask configurations.}
+\label{fig:vae_triptych_panel_02}
+\end{figure}
+
 
 \end{document}
